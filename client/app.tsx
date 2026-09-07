@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   GitBranch,
   GitCompareArrows,
@@ -41,6 +41,15 @@ import {
 import type { Anchor } from "@/lib/comments/model";
 import { ReviewSessionProvider, useReviewSession } from "@/hooks/use-review-session";
 import { ReviewControls } from "@/components/review/review-controls";
+import { clampSidebarWidth, SidebarResizer } from "@/components/review/sidebar-resizer";
+
+const FILE_SIDEBAR_INITIAL_WIDTH_PX = 246;
+const FILE_SIDEBAR_MIN_WIDTH_PX = 200;
+const FILE_SIDEBAR_MAX_WIDTH_PX = 400;
+const COMMENT_SIDEBAR_INITIAL_WIDTH_PX = 300;
+const COMMENT_SIDEBAR_MIN_WIDTH_PX = 260;
+const COMMENT_SIDEBAR_MAX_WIDTH_PX = 440;
+const REVIEW_AREA_MIN_WIDTH_PX = 420;
 
 function Stats({ files }: { files: ReviewFile[] }) {
   return (
@@ -100,7 +109,8 @@ function Workspace() {
   const comments = useCommentStore(data, model.meta);
   const [commentsOpen, setCommentsOpen] = useState(true);
   const [commentDrawer, setCommentDrawer] = useState(false);
-  const [commentWidth, setCommentWidth] = useState(300);
+  const [fileSidebarWidth, setFileSidebarWidth] = useState(FILE_SIDEBAR_INITIAL_WIDTH_PX);
+  const [commentSidebarWidth, setCommentSidebarWidth] = useState(COMMENT_SIDEBAR_INITIAL_WIDTH_PX);
   function jumpComment(a: Anchor) {
     setCommentDrawer(false);
     diffRef.current?.scrollToAnchor(a);
@@ -109,6 +119,29 @@ function Workspace() {
   const [width, setWidth] = useState(() => innerWidth);
   const [simulate, setSimulate] = useState(false);
   const [previewFit, setPreviewFit] = useState(true);
+  const desktopCommentsVisible = width >= 1024 && commentsOpen;
+  const fileSidebarBounds = {
+    min: FILE_SIDEBAR_MIN_WIDTH_PX,
+    max: Math.max(
+      FILE_SIDEBAR_MIN_WIDTH_PX,
+      Math.min(
+        FILE_SIDEBAR_MAX_WIDTH_PX,
+        width - (desktopCommentsVisible ? commentSidebarWidth : 0) - REVIEW_AREA_MIN_WIDTH_PX,
+      ),
+    ),
+  };
+  const visibleFileSidebarWidth = clampSidebarWidth(fileSidebarWidth, fileSidebarBounds);
+  const commentSidebarBounds = {
+    min: COMMENT_SIDEBAR_MIN_WIDTH_PX,
+    max: Math.max(
+      COMMENT_SIDEBAR_MIN_WIDTH_PX,
+      Math.min(
+        COMMENT_SIDEBAR_MAX_WIDTH_PX,
+        width - visibleFileSidebarWidth - REVIEW_AREA_MIN_WIDTH_PX,
+      ),
+    ),
+  };
+  const visibleCommentSidebarWidth = clampSidebarWidth(commentSidebarWidth, commentSidebarBounds);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("patchwork-theme", theme);
@@ -276,8 +309,25 @@ function Workspace() {
         </header>
         <div className="workspace">
           <SidebarProvider>
-            <Sidebar className="file-sidebar" collapsible="none">
+            <Sidebar
+              id="file-sidebar"
+              className="file-sidebar"
+              collapsible="none"
+              style={
+                {
+                  "--file-sidebar-width": `${visibleFileSidebarWidth}px`,
+                } as CSSProperties
+              }
+            >
               {sidebar}
+              <SidebarResizer
+                controls="file-sidebar"
+                label="Resize file sidebar"
+                value={visibleFileSidebarWidth}
+                bounds={fileSidebarBounds}
+                growDirection={1}
+                onChange={setFileSidebarWidth}
+              />
             </Sidebar>
             <Sheet open={drawer} onOpenChange={setDrawer}>
               <SheetContent side="left" className="file-sheet">
@@ -410,44 +460,20 @@ function Workspace() {
                 version={model.version}
               />
             </main>
-            {width >= 1024 && commentsOpen && (
+            {desktopCommentsVisible && (
               <aside
+                id="comments-sidebar"
                 className="comments-sidebar"
-                style={{ width: commentWidth }}
+                style={{ width: visibleCommentSidebarWidth }}
                 aria-label="Comments overview"
               >
-                <div
-                  className="comments-resizer"
-                  role="separator"
-                  aria-label="Resize comments sidebar"
-                  aria-orientation="vertical"
-                  aria-valuenow={commentWidth}
-                  aria-valuemin={260}
-                  aria-valuemax={440}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                      e.preventDefault();
-                      setCommentWidth((w) =>
-                        Math.max(260, Math.min(440, w + (e.key === "ArrowLeft" ? 20 : -20))),
-                      );
-                    }
-                  }}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    const start = e.clientX,
-                      initial = commentWidth;
-                    const move = (event: PointerEvent) =>
-                      setCommentWidth(
-                        Math.max(260, Math.min(440, initial + start - event.clientX)),
-                      );
-                    const up = () => {
-                      window.removeEventListener("pointermove", move);
-                      window.removeEventListener("pointerup", up);
-                    };
-                    window.addEventListener("pointermove", move);
-                    window.addEventListener("pointerup", up, { once: true });
-                  }}
+                <SidebarResizer
+                  controls="comments-sidebar"
+                  label="Resize comments sidebar"
+                  value={visibleCommentSidebarWidth}
+                  bounds={commentSidebarBounds}
+                  growDirection={-1}
+                  onChange={setCommentSidebarWidth}
                 />
                 <CommentOverview
                   selected={selected}

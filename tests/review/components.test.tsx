@@ -6,9 +6,19 @@ import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
 import { ThreadView } from "../../components/review/comment-thread";
 import { buildFileTreeEntries } from "../../components/review/file-tree";
+import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
 import { CommentContext, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
 import type { Thread } from "../../lib/comments/model";
+
+test("sidebar resizing follows its edge and respects width bounds", () => {
+  const bounds = { min: 200, max: 400 };
+
+  assert.equal(resizeSidebarWidth(250, 30, 1, bounds), 280);
+  assert.equal(resizeSidebarWidth(300, -40, -1, bounds), 340);
+  assert.equal(resizeSidebarWidth(250, -100, 1, bounds), bounds.min);
+  assert.equal(resizeSidebarWidth(300, -200, -1, bounds), bounds.max);
+});
 
 test("file tree compacts chains containing only one folder", () => {
   const paths = [

@@ -242,7 +242,8 @@ button {
   width: 100%;
 }
 .file-sidebar {
-  width: 246px !important;
+  position: relative;
+  width: var(--file-sidebar-width) !important;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
 }
@@ -1252,19 +1253,25 @@ button {
   background: var(--mantle);
   min-height: 0;
 }
-.comments-resizer {
+.sidebar-resizer {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -4px;
   width: 8px;
   cursor: col-resize;
   z-index: 5;
   touch-action: none;
 }
-.comments-resizer:hover,
-.comments-resizer:focus-visible {
+.file-sidebar > .sidebar-resizer {
+  right: -4px;
+}
+.comments-sidebar > .sidebar-resizer {
+  left: -4px;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
   background: color-mix(in srgb, var(--mauve) 30%, transparent);
+  outline: none;
 }
 .comments-overview {
   height: 100%;
