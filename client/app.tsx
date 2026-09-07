@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GitCompareArrows } from "lucide-react";
 
 import { ChangedFilesSidebar } from "@/components/review/changed-files-sidebar";
@@ -19,6 +19,7 @@ import { ThemeProvider, useTheme } from "@/hooks/use-theme";
 import { useViewportWidth } from "@/hooks/use-viewport-width";
 import { useWorkspaceShortcuts } from "@/hooks/use-workspace-shortcuts";
 import type { Anchor } from "@/lib/comments/model";
+import { reviewDocumentTitle } from "@/client/document-title";
 
 const MOBILE_BREAKPOINT_PX = 768;
 const COMMENTS_DRAWER_BREAKPOINT_PX = 1024;
@@ -71,6 +72,15 @@ function Workspace() {
   const comments = useCommentStore(data, model.meta);
   const sidebars = useSidebarLayout(viewportWidth, commentsOpen);
   const { toggleTheme } = useTheme();
+  const documentTitle = reviewDocumentTitle(
+    data.repository,
+    data.branch,
+    session.snapshot.comparison?.refs,
+  );
+
+  useEffect(() => {
+    document.title = documentTitle;
+  }, [documentTitle]);
 
   const chooseFile = useCallback(
     (file: number) => {

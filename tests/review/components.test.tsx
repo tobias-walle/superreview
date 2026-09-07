@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { reviewDocumentTitle } from "../../client/document-title";
 import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
 import { ThreadView } from "../../components/review/comment-thread";
@@ -10,6 +11,21 @@ import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
 import { CommentContext, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
 import type { Thread } from "../../lib/comments/model";
+
+test("document title identifies the project, branch, and comparison", () => {
+  assert.equal(
+    reviewDocumentTitle("superreview", "feature/title"),
+    "superreview ⋅ feature/title ⋅ local",
+  );
+  assert.equal(
+    reviewDocumentTitle("superreview", "feature/title", ["main", "feature/title"]),
+    "superreview ⋅ feature/title ⋅ main → feature/title",
+  );
+  assert.equal(
+    reviewDocumentTitle("superreview", "feature/title", ["main...HEAD"]),
+    "superreview ⋅ feature/title ⋅ main...HEAD",
+  );
+});
 
 test("sidebar resizing follows its edge and respects width bounds", () => {
   const bounds = { min: 200, max: 400 };
