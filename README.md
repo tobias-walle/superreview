@@ -27,10 +27,18 @@ Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your
 You’ll need Node.js 22.13 or newer and Git. Install Superreview from npm:
 
 ```sh
-npm install --global superreview
+npm install --global @tobias-walle/superreview
 ```
 
 Then switch to the repository you want to review and run `superreview`.
+
+### Try it without installing
+
+Run Superreview directly in the Git repository you want to review:
+
+```sh
+npx @tobias-walle/superreview
+```
 
 ## Common workflows
 
@@ -82,9 +90,9 @@ See [agent skill setup](docs/CLI.md#agent-skill) for details.
 
 Word-level highlighting is based on [delta’s](https://github.com/dandavison/delta) alignment algorithm. See [third-party notices](THIRD_PARTY_NOTICES.md) for licenses.
 
-## Development
+## Development from source
 
-From the source checkout:
+From a source checkout:
 
 ```sh
 pnpm install --frozen-lockfile

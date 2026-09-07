@@ -8,9 +8,9 @@ The repository variable `NPM_PUBLISH_ENABLED` is a bootstrap safety switch. The 
 
 1. Push `main` while `NPM_PUBLISH_ENABLED` is unset.
 2. From a clean checkout of the release commit, run `pnpm install --frozen-lockfile`, `pnpm check -- --force`, and `pnpm build`.
-3. Run `npm login`, then publish the initial package with `cd dist-cli && npm publish --access public`.
+3. Run `npm login`, then publish the initial `@tobias-walle/superreview` package with `cd dist-cli && npm publish --access public`.
 4. Tag the same commit with `v0.2.1` and push the tag.
-5. Configure `release.yml` as the npm trusted publisher. Bind it to the `npm-production` GitHub environment and allow `npm publish`.
+5. Configure `release.yml` as the trusted publisher for `@tobias-walle/superreview`. Bind it to the `npm-production` GitHub environment and allow `npm publish`.
 6. Configure the `npm-production` environment and its protection rules in GitHub.
 7. Set the GitHub Actions repository variable `NPM_PUBLISH_ENABLED` to `true`.
 
