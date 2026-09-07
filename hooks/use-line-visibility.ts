@@ -27,7 +27,7 @@ export function useLineVisibility(
         candidates.clear();
         return;
       }
-      // A clipped desktop-preview iframe does not prove that both panes were seen.
+      // A clipped host iframe does not prove that both panes were seen.
       try {
         const frame = window.frameElement;
         if (frame) {

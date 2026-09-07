@@ -273,6 +273,10 @@ button {
   gap: 8px;
   align-items: center;
 }
+.side-heading-icon {
+  width: 15px;
+  color: var(--overlay);
+}
 .change-summary {
   padding: 0 17px 18px;
   display: flex;
@@ -449,6 +453,9 @@ button {
   font-size: 12px;
   margin-top: 4px;
 }
+.review-subtitle-separator {
+  margin: 0 5px;
+}
 .compare-label {
   display: flex;
   gap: 9px;
@@ -511,6 +518,12 @@ button {
 .word-label svg {
   width: 14px;
   color: var(--mauve);
+}
+.word-diff-symbol {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .toolbar .icon-button.active {
   color: var(--mauve);
@@ -798,20 +811,6 @@ button {
 }
 .mobile-only {
   display: none;
-}
-.desktop-preview-bar {
-  height: 45px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  background: var(--mantle);
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-.simulated-viewport {
-  width: 100%;
-  overflow: hidden;
 }
 .loading-state {
   padding: 45px;
