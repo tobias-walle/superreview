@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "dist-cli/**",
+    "tests/.build/**",
+    "vendor/**",
+    "THIRD_PARTY_NOTICES.md",
+    "pnpm-lock.yaml"
+  ]
+}

@@ -1,0 +1,34 @@
+# Dependencies and pnpm cache
+/node_modules/
+/.pnpm-store/
+
+# Build, test, and check output
+/dist-cli/
+/coverage/
+/tests/.build/
+/.check-cache/
+*.tsbuildinfo
+
+# superreview local state
+/.superreview/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs and process files
+*.log
+*.pid
+pnpm-debug.log*
+
+# Package artifacts created at the repository root
+/*.tgz
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
