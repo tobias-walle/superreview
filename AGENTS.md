@@ -2,6 +2,7 @@
 
 - Use Node 22.13+ and pnpm. Keep `pnpm-lock.yaml` synchronized with `package.json`.
 - Read `DESIGN.md` for UI changes; `docs/ARCHITECTURE.md` for review/storage changes.
+- Avoid unexplained numeric literals and arithmetic in components. Name layout constants, prefer CSS custom properties for related dimensions, and document values tied to virtualization, accessibility or platform behavior.
 - Keep review rules in `lib/review/` independent of React, Git, filesystem and browser APIs. Put I/O in `adapters/`; coordinate UI through `ReviewClient` and hooks. Add a boundary only when a concrete consumer needs it.
 - Preserve append-only events, ordered writes, immutable submissions and snapshots, and optimistic concurrency. Never rewrite old feedback to match new code.
 - Viewed state requires matching content evidence. Overscan is not viewed coverage. Keep large diffs virtualized and avoid worker rebuilds for comment-only changes.
