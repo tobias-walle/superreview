@@ -2,15 +2,21 @@
 
 A local Git review workspace with Catppuccin Mocha and Latte themes, continuous virtualized diffs, line and range comments, replies, viewed checkpoints, and permanent submission history.
 
-Requires Node.js 22.13+ and Git. Build and install the package from this checkout:
+Requires Node.js 22.13+ and Git. For day-to-day development, globally link the CLI from this checkout:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm link:global
+cd your-repository
+superreview
+```
+
+The link follows the checkout. Run `pnpm build` after source changes. To test the standalone package instead:
+
+```sh
 pnpm build
 pnpm --dir dist-cli pack --pack-destination ..
 pnpm add --global ./superreview-0.2.1.tgz
-cd your-repository
-superreview
 ```
 
 The CLI opens a browser and binds to a random port on 127.0.0.1. Keep the terminal running. Ctrl+C stops the server; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port.

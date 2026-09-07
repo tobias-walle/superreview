@@ -20,7 +20,13 @@ pnpm format:check
 
 `pnpm dev` rebuilds and launches Superreview against the current Git worktree. Pass CLI options directly, for example `pnpm dev --no-open main...HEAD`.
 
-Run the built CLI from any Git worktree. To create and install a package locally:
+For day-to-day development, build and globally link the CLI from this checkout:
+
+```sh
+pnpm link:global
+```
+
+The link follows this checkout. Run `pnpm build` after source changes. To test the standalone package instead:
 
 ```sh
 pnpm --dir dist-cli pack --pack-destination ..

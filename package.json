@@ -3,10 +3,14 @@
   "version": "0.2.1",
   "private": true,
   "description": "A local Git review workspace with permanent review history",
+  "bin": {
+    "superreview": "dist-cli/superreview.mjs"
+  },
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-cli.mjs --quiet && node dist-cli/superreview.mjs",
     "build": "node scripts/build-cli.mjs",
+    "link:global": "pnpm run build && pnpm add --global .",
     "test": "pnpm run build && pnpm run test:review && pnpm run test:diff && pnpm run test:ui",
     "test:review": "node scripts/test-review.mjs",
     "test:diff": "node scripts/verify-diff.mjs && node --experimental-strip-types scripts/verify-review.mjs && node --experimental-strip-types scripts/verify-comments.mjs",
