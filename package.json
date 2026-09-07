@@ -5,7 +5,7 @@
   "description": "A local Git review workspace with permanent review history",
   "type": "module",
   "scripts": {
-    "dev": "pnpm run build && node dist-cli/superreview.mjs",
+    "dev": "node scripts/build-cli.mjs --quiet && node dist-cli/superreview.mjs",
     "build": "node scripts/build-cli.mjs",
     "test": "pnpm run build && pnpm run test:review && pnpm run test:diff && pnpm run test:ui",
     "test:review": "node scripts/test-review.mjs",

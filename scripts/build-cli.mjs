@@ -11,7 +11,8 @@ await build({
   format: "esm",
   banner: { js: "#!/usr/bin/env node" },
 });
-execFileSync("node_modules/.bin/vite", ["build"], { stdio: "inherit" });
+const viteArgs = process.argv.includes("--quiet") ? ["build", "--logLevel", "error"] : ["build"];
+execFileSync("node_modules/.bin/vite", viteArgs, { stdio: "inherit" });
 await cp("skill-data", "dist-cli/skill-data", { recursive: true });
 await cp("skills", "dist-cli/skills", { recursive: true });
 await chmod("dist-cli/superreview.mjs", 0o755);
