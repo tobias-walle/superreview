@@ -5,9 +5,48 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
 import { ThreadView } from "../../components/review/comment-thread";
+import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { CommentContext, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
 import type { Thread } from "../../lib/comments/model";
+
+test("file tree compacts chains containing only one folder", () => {
+  const paths = [
+    "agents/claim/src/package/application/use_cases/link_claim/observe.py",
+    "agents/claim/src/package/domain/models.py",
+    "agents/claim/src/package/tests/test_claim.py",
+  ];
+
+  const entries = buildFileTreeEntries(paths, new Set());
+  assert.deepEqual(entries.slice(0, 3), [
+    {
+      kind: "folder",
+      key: "folder:agents/claim/src/package",
+      label: "agents/claim/src/package",
+      path: "agents/claim/src/package",
+      depth: 0,
+      count: 3,
+    },
+    {
+      kind: "folder",
+      key: "folder:agents/claim/src/package/application/use_cases/link_claim",
+      label: "application/use_cases/link_claim",
+      path: "agents/claim/src/package/application/use_cases/link_claim",
+      depth: 1,
+      count: 1,
+    },
+    {
+      kind: "file",
+      key: paths[0],
+      file: 0,
+      depth: 2,
+    },
+  ]);
+
+  assert.deepEqual(buildFileTreeEntries(paths, new Set(["agents/claim/src/package"])), [
+    entries[0],
+  ]);
+});
 
 test("comment Markdown renders lists and fenced code but never raw HTML or remote images", () => {
   const html = renderToStaticMarkup(

@@ -305,6 +305,9 @@ button {
   background: var(--red);
 }
 .tree {
+  --tree-folder-inline-start: 8px;
+  --tree-file-inline-start: 14px;
+  --tree-trailing-control-space: 34px;
   padding: 8px;
   overflow: auto;
   flex: 1;
@@ -312,19 +315,33 @@ button {
 .folder-button {
   height: 31px;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 7px;
   color: var(--subtext);
   padding: 0 8px;
+  padding-left: calc(var(--tree-folder-inline-start) + var(--tree-indent, 0px));
   border-radius: 4px;
   font-size: 13px;
 }
 .folder-button:hover {
   background: var(--surface);
 }
+.folder-button svg {
+  flex-shrink: 0;
+}
 .folder-button svg:first-child {
   width: 12px;
+}
+.tree-entry-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .folder-button .folder-count {
   margin-left: auto;
@@ -333,8 +350,11 @@ button {
 }
 .tree-file {
   height: 33px !important;
+  min-width: 0;
+  overflow: hidden;
   border-radius: 5px !important;
   font-size: 13px !important;
+  padding-left: calc(var(--tree-file-inline-start) + var(--tree-indent, 0px)) !important;
   padding-right: 9px !important;
   gap: 8px !important;
   position: relative;
@@ -1196,7 +1216,7 @@ button {
   }
 }
 .virtual-tree .tree-file {
-  padding-right: 34px !important;
+  padding-right: var(--tree-trailing-control-space) !important;
 }
 .tree-viewed::after {
   content: "";
