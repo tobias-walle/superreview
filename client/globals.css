@@ -1380,8 +1380,8 @@ button {
   font: 12px var(--font-mono);
 }
 .comment-card p {
-  margin: 9px 0 10px;
-  font-size: 14px;
+  margin: 7px 0 8px;
+  font-size: 13px;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1636,8 +1636,8 @@ button {
   height: 13px;
 }
 .comment-markdown {
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--foreground);
   overflow-wrap: anywhere;
 }
@@ -1722,16 +1722,16 @@ button {
 }
 .comment-muted {
   color: var(--overlay);
-  font-size: 14px;
+  font-size: 13px;
 }
 .thread-reply {
   display: flex;
   width: 100%;
   gap: 8px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-top: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 13px;
   text-align: left;
   color: var(--subtext);
 }
@@ -1745,10 +1745,14 @@ button {
   color: var(--overlay);
 }
 .comment-composer {
+  --comment-editor-min-height: 96px;
+  --comment-editor-max-height: 400px;
+  --comment-body-font-size: 13px;
+  --comment-body-line-height: 1.5;
   background: var(--background);
   border: 1px solid color-mix(in srgb, var(--mauve) 45%, var(--border));
   border-radius: 7px;
-  padding: 12px;
+  padding: 10px;
   min-width: 0;
 }
 .thread-content > .inline-composer {
@@ -1762,7 +1766,7 @@ button {
   color: var(--mauve);
 }
 .composer-anchor strong {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--foreground);
 }
 .composer-anchor > span {
@@ -1777,7 +1781,7 @@ button {
   font: 12px var(--font-mono);
   color: var(--overlay);
   overflow-wrap: anywhere;
-  margin: 2px 0 12px;
+  margin: 2px 0 8px;
 }
 .comment-tabs {
   gap: 6px;
@@ -1795,15 +1799,15 @@ button {
 .comment-composer textarea {
   display: block;
   width: 100%;
-  min-height: 130px;
+  min-height: var(--comment-editor-min-height);
   resize: vertical;
-  max-height: 400px;
+  max-height: var(--comment-editor-max-height);
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 10px 11px;
+  padding: 9px 10px;
   background: var(--mantle);
   color: var(--foreground);
-  font: 14px/1.6 var(--font-mono);
+  font: var(--comment-body-font-size) / var(--comment-body-line-height) var(--font-sans);
   outline: none;
 }
 .comment-composer textarea:focus {
@@ -1811,18 +1815,18 @@ button {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mauve) 10%, transparent);
 }
 .markdown-preview {
-  min-height: 130px;
-  max-height: 400px;
+  min-height: var(--comment-editor-min-height);
+  max-height: var(--comment-editor-max-height);
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 10px 11px;
+  padding: 9px 10px;
 }
 .composer-footer {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .composer-footer > span {
   color: var(--overlay);
@@ -1977,14 +1981,12 @@ button {
     display: none;
   }
   .mobile-comment-composer .comment-composer {
+    --comment-editor-min-height: 150px;
+    --comment-editor-max-height: 32dvh;
+    --comment-body-font-size: 16px;
     border: 0;
     border-radius: 0;
     padding: 16px 14px max(16px, env(safe-area-inset-bottom));
-  }
-  .mobile-comment-composer textarea {
-    font-size: 16px;
-    min-height: 150px;
-    max-height: 32dvh;
   }
   .mobile-comment-composer .composer-footer {
     gap: 8px;
