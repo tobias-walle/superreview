@@ -1,5 +1,5 @@
 {
-  "name": "@tobias-walle/superreview",
+  "name": "@tobiw/superreview",
   "version": "0.2.1",
   "private": true,
   "description": "A local Git review workspace with permanent review history",

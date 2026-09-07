@@ -5,7 +5,7 @@ A local Git review workspace with Catppuccin Mocha and Latte themes, continuous 
 Requires Node.js 22.13+ and Git. Install the CLI from npm:
 
 ```sh
-npm install --global @tobias-walle/superreview
+npm install --global @tobiw/superreview
 cd your-repository
 superreview
 ```
@@ -17,13 +17,7 @@ pnpm install --frozen-lockfile
 pnpm link:global
 ```
 
-The link follows the checkout. Run `pnpm build` after source changes. To test the standalone package instead:
-
-```sh
-pnpm build
-pnpm --dir dist-cli pack --pack-destination ..
-pnpm add --global ./tobias-walle-superreview-*.tgz
-```
+The link follows the checkout. Run `pnpm build` after source changes.
 
 The CLI opens a browser and binds to a random port on 127.0.0.1. Keep the terminal running. Ctrl+C stops the server; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port.
 
@@ -87,13 +81,13 @@ Renames currently appear as deletion and addition. Merge conflicts must be resol
 Install the small discovery skill from your local Superreview source checkout:
 
 ```sh
-pnpm dlx skills add /path/to/superreview --skill superreview
+npx skills add /path/to/superreview --skill superreview
 ```
 
 The CLI package also includes the discovery skill. After a global CLI install:
 
 ```sh
-pnpm dlx skills add "$(pnpm root -g)/@tobias-walle/superreview" --skill superreview
+npx skills add "$(npm root --global)/@tobiw/superreview" --skill superreview
 ```
 
 Choose your harness in the installer. Add `--global` to install for all projects. The skill installer does not install the Superreview executable.

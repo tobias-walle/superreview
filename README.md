@@ -27,7 +27,7 @@ Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your
 You’ll need Node.js 22.13 or newer and Git. Install Superreview from npm:
 
 ```sh
-npm install --global @tobias-walle/superreview
+npm install --global @tobiw/superreview
 ```
 
 Then switch to the repository you want to review and run `superreview`.
@@ -37,7 +37,7 @@ Then switch to the repository you want to review and run `superreview`.
 Run Superreview directly in the Git repository you want to review:
 
 ```sh
-npx @tobias-walle/superreview
+npx @tobiw/superreview
 ```
 
 ## Common workflows
