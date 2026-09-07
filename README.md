@@ -1,68 +1,106 @@
 # Superreview
 
-A dense Git review workspace, launched from the command line. Continuous unified or split diffs, file tree, Catppuccin Mocha/Latte, Markdown comments and replies, viewed checkpoints, and immutable review submissions.
+Superreview is a local code review tool for Git. Open changes in your browser, leave comments, and share feedback with your coding agent or teammates. Track what you’ve reviewed as the code changes, without losing earlier feedback.
 
-[![Superreview in Catppuccin Mocha: split diff with word highlights, file tree, viewed progress and Markdown review feedback.](docs/images/superreview-desktop.jpg)](docs/images/superreview-desktop.jpg)
+[![Superreview showing a split diff, file tree, review progress, and comments.](docs/images/superreview-desktop.jpg)](docs/images/superreview-desktop.jpg)
 
-_The sample repository, shown in split view._
+## Quick start
 
-## Develop and test
+After [installing Superreview](#installation), run it inside the Git repository you want to review:
+
+```sh
+superreview                 # Review staged, unstaged, and untracked changes
+superreview main...HEAD     # Review your branch against main
+```
+
+Superreview opens in your browser:
+
+1. Browse changes in unified or split view.
+2. Add line comments or select a range to comment on. Files are marked viewed as you read them, or you can mark them manually.
+3. Submit a feedback round and choose **Copy as Markdown** to share it.
+4. After more edits, refresh and use **Since reviewed** to focus on remaining changes.
+
+Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your review stays saved.
+
+## Installation
+
+**Not published to npm yet. Coming soon.** For now, install from a source checkout.
+
+You’ll need Node.js 22.13 or newer, Git, and pnpm. From the Superreview checkout:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm dev --help
-pnpm build
-node dist-cli/superreview.mjs --help
-pnpm test
-pnpm lint
-pnpm format:check
-```
-
-`pnpm dev` rebuilds and launches Superreview against the current Git worktree. Pass CLI options directly, for example `pnpm dev --no-open main...HEAD`.
-
-For day-to-day development, build and globally link the CLI from this checkout:
-
-```sh
 pnpm link:global
 ```
 
-The link follows this checkout. Run `pnpm build` after source changes. To test the standalone package instead:
+Then switch to the repository you want to review and run `superreview`.
+
+The installed command follows this checkout. Run `pnpm build` after updating the source.
+
+## Common workflows
+
+### Review your agent’s work
+
+Run `superreview` after your agent makes changes. Leave comments, submit a round, and copy the feedback as Markdown for your agent. After it addresses your feedback, refresh the review. Unchanged files retain their viewed state, and **Since reviewed** helps you focus on what still needs attention.
+
+### Review a teammate’s branch
+
+Fetch and check out the branch using Git, then compare it against the target branch:
 
 ```sh
-pnpm --dir dist-cli pack --pack-destination ..
-pnpm add --global ./superreview-0.2.1.tgz
+superreview main...HEAD
 ```
 
-- [CLI workflows and local folder format](docs/CLI.md)
+Review, comment, and submit a round. Copy the feedback from the submission dialog or **History** to share it. After new commits arrive, run the same command again to update the review.
+
+### Return to a saved review
+
+```sh
+superreview list
+superreview open <id>
+```
+
+Opening a saved review restores its captured changes, even if the branch has changed or disappeared. Use **Refresh** to capture the current code.
+
+See the [CLI guide](docs/CLI.md) for more comparisons, path filters, exports, and review management commands.
+
+## Local and private
+
+- Your code and review history stay on your machine. No remote service receives your code.
+- Reviews are saved in `.superreview/` inside your repository, automatically excluded from Git locally.
+- Earlier submissions preserve the feedback and code context from that round. Later edits do not rewrite them.
+- GitHub/GitLab fetching and publishing are not supported yet. Check out branches with Git and share feedback manually.
+
+## Coding agent integration
+
+You can install the optional Superreview skill to help your coding agent work with reviews:
+
+```sh
+npx skills add git@github.com:tobias-walle/superreview.git --skill superreview
+```
+
+Choose your agent harness in the installer. The skill does not install the Superreview command itself.
+
+See [agent skill setup](docs/CLI.md#agent-skill) for details.
+
+## Credits and licenses
+
+Word-level highlighting is based on [delta’s](https://github.com/dandavison/delta) alignment algorithm. See [third-party notices](THIRD_PARTY_NOTICES.md) for licenses.
+
+## Development
+
+From the source checkout:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev                 # Build and launch against the current worktree
+pnpm dev --help          # Show CLI options
+pnpm build              # Build the standalone CLI
+pnpm check              # Run the cached full check suite
+```
+
+Pass CLI options directly, for example `pnpm dev --no-open main...HEAD`.
+
+- [CLI workflows and local storage](docs/CLI.md)
 - [Architecture and extension boundaries](docs/ARCHITECTURE.md)
 - [Release verification](docs/TESTING.md)
-
-The CLI bundles a Vite SPA and serves it from a loopback-only Node server. Captured repository contents and review history stay local. GitHub/GitLab sync and guided review artifacts are future extension points.
-
-## Research and choices
-
-| Layer           | Choice                                                    | Reason                                                                                                                                   |
-| --------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Line diff       | Git `--diff-algorithm=histogram`                          | Uses low-occurrence common lines as anchors, extending patience. A sound default for readable code review. Git's default is still Myers. |
-| Word alignment  | JavaScript port of delta's weighted Levenshtein alignment | Insertion/deletion cost 2, gap-open penalty 1, insertion → deletion → equal tie order. Matches delta's grouping preference.              |
-| Tokenization    | Unicode word tokens; grapheme tokens between words        | Mirrors delta's default `\w+` approach and preserves original text.                                                                      |
-| Line pairing    | Delta-style greedy homolog pairing                        | Only apply word highlights to similar changed lines; show dissimilar lines as whole additions/deletions.                                 |
-| Structural diff | Deferred                                                  | Difftastic compares syntax structure; useful later as an optional mode, but needs parser/language handling and a different data model.   |
-| UI              | React, shadcn/Radix primitives, CSS tokens                | Portable view components with direct theme tokens. No dependency on a terminal renderer.                                                 |
-
-Primary sources, checked 2026-09-06:
-
-- [Git diff algorithms](https://git-scm.com/docs/git-diff)
-- [delta overview](https://github.com/dandavison/delta)
-- [delta alignment source](https://github.com/dandavison/delta/blob/main/src/align.rs)
-- [delta edit inference source](https://github.com/dandavison/delta/blob/main/src/edits.rs)
-- [Difftastic](https://difftastic.wilfred.me.uk/)
-- [Catppuccin palette](https://github.com/catppuccin/catppuccin)
-
-This is a port of delta's core alignment algorithm, not the delta binary. Line-pair similarity uses grapheme counts rather than terminal cell widths for non-ASCII text. It uses a 0.6 distance threshold. Extremely long token comparisons fall back to line-only highlighting above one million alignment cells. Production parity needs full delta golden fixtures, terminal-width parity, configurable tokenization, and benchmarks.
-
-## Source layout
-
-`lib/review` contains domain rules; `adapters` contains Git, filesystem, HTTP server, and browser HTTP adapters; `cli` contains the entry point. The Vite SPA lives in `client`, `hooks`, and `components/review`. Diff parsing, worker models, and delta-derived word matching live in `lib/diff`.
-
-See `THIRD_PARTY_NOTICES.md` for licenses.
