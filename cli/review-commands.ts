@@ -214,6 +214,10 @@ export async function executeReviewWrite(options: {
   if (active?.reviewId === options.reviewId) {
     try {
       const session = await serverRequest<Session>(active.url, "session");
+      if (session.status !== "ready")
+        throw new Error(
+          session.status === "error" ? session.error : "Review capture is still in progress",
+        );
       const command = await options.command(
         {
           state: session.state,

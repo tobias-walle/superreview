@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildFileModel, BLOCK_ROWS } from "../lib/diff/render.ts";
+import { buildFileModel, createWordDiffBudget, BLOCK_ROWS } from "../lib/diff/render.ts";
 import {
   recordDecision,
   recordAutomatic,
@@ -65,6 +65,27 @@ assert.equal(
   sourceLines,
 );
 assert(ms < 10000, `Preparation exceeded 10s: ${ms}ms`);
+const sharedBudget = createWordDiffBudget();
+const repeatedChange = {
+  path: "repeated.ts",
+  status: "M",
+  hunks: [
+    {
+      header: "@@ -1,300 +1,300 @@",
+      oldStart: 1,
+      newStart: 1,
+      lines: [
+        ...Array.from({ length: 300 }, (_, i) => `-const old_value_${i} = ${i};`),
+        ...Array.from({ length: 300 }, (_, i) => `+const new_value_${i} = ${i};`),
+      ],
+    },
+  ],
+};
+buildFileModel(repeatedChange, sharedBudget);
+const remainingAfterFirst = { ...sharedBudget };
+buildFileModel(repeatedChange, sharedBudget);
+assert(sharedBudget.cells < remainingAfterFirst.cells);
+assert(sharedBudget.pairs < remainingAfterFirst.pairs);
 console.log(
   JSON.stringify({
     passed: true,
@@ -77,6 +98,7 @@ console.log(
       "skipped coverage",
       "source row identity",
       "large change CPU budget",
+      "capture-wide word diff budget",
     ],
   }),
 );

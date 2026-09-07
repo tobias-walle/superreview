@@ -1,29 +1,58 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { httpClient } from "../adapters/browser/client";
-import type { Command, ReviewClient, Session } from "../lib/review/types";
+import type {
+  CaptureProgress,
+  Command,
+  ReadySession,
+  ReviewClient,
+  Session,
+} from "../lib/review/types";
 import type { Draft } from "../lib/comments/model";
 import { uid } from "../lib/comments/model";
 
+const CAPTURE_POLL_MS = 100;
 const EXTERNAL_UPDATE_INTERVAL_MS = 2000;
+const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const readySession = (session: Session): session is ReadySession => session.status === "ready";
 
 function useSession() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<ReadySession | null>(null);
+  const [capture, setCapture] = useState<CaptureProgress | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"full" | "since">("full");
-  const current = useRef(session);
+  const current = useRef<ReadySession | null>(session);
   const client = useRef<ReviewClient | null>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const apply = (loaded: Session) => {
+    if (readySession(loaded)) {
+      current.current = loaded;
+      setSession(loaded);
+      setCapture(null);
+      setError("");
+      return true;
+    }
+    if (loaded.status === "capturing") {
+      setCapture(loaded.progress);
+      setError("");
+    } else {
+      setCapture(null);
+      setError(loaded.error);
+    }
+    return false;
+  };
   useEffect(() => {
     let alive = true;
+    client.current = httpClient;
     (async () => {
-      const loaded = await httpClient.load();
-      if (alive) {
-        client.current = httpClient;
-        current.current = loaded;
-        setSession(loaded);
+      while (alive) {
+        const loaded = await httpClient.load();
+        if (!alive || apply(loaded) || loaded.status === "error") return;
+        await delay(CAPTURE_POLL_MS);
       }
-    })().catch((e) => setError(e.message));
+    })().catch((e) => {
+      if (alive) setError(e.message);
+    });
     return () => {
       alive = false;
     };
@@ -41,6 +70,7 @@ function useSession() {
       if (!client.current || !current.current) return;
       const sync = queue.current.then(async () => {
         const loaded = await client.current!.load();
+        if (!readySession(loaded)) return;
         const old = current.current!;
         if (loaded.state.sequence <= old.state.sequence) return;
         const showingCurrentSnapshot = old.snapshot.id === old.state.snapshotId;
@@ -59,8 +89,9 @@ function useSession() {
   function execute(command: Command) {
     const id = uid();
     return enqueue(async () => {
-      const next = await client.current!.execute(command, current.current!.state.sequence, id);
-      const updated = { ...current.current!, state: next };
+      const active = current.current!;
+      const next = await client.current!.execute(command, active.state.sequence, id);
+      const updated = { ...active, state: next };
       current.current = updated;
       setSession(updated);
       setError("");
@@ -68,12 +99,14 @@ function useSession() {
     });
   }
   function saveDrafts(drafts: Draft[]) {
-    const updated = { ...current.current!, drafts };
+    const active = current.current!;
+    const updated = { ...active, drafts };
     current.current = updated;
     setSession(updated);
     return enqueue(async () => {
-      const revision = await client.current!.saveDrafts(drafts, current.current!.draftRevision);
-      const saved = { ...current.current!, draftRevision: revision };
+      const latest = current.current!;
+      const revision = await client.current!.saveDrafts(drafts, latest.draftRevision);
+      const saved = { ...latest, draftRevision: revision };
       current.current = saved;
       setSession(saved);
     });
@@ -83,10 +116,8 @@ function useSession() {
     try {
       await enqueue(async () => {
         const loaded = await client.current!.refresh(nextView);
-        current.current = loaded;
-        setSession(loaded);
+        if (!apply(loaded)) throw new Error("Capture did not finish.");
         setView(nextView);
-        setError("");
       });
     } catch {
       /* Error is visible in the workspace. */
@@ -98,14 +129,18 @@ function useSession() {
     try {
       await enqueue(async () => {
         const loaded = await client.current!.load();
+        if (!readySession(loaded)) {
+          apply(loaded);
+          return;
+        }
         const old = current.current!;
-        // Returning from desktop simulation must pick up the iframe's feedback.
         const updated = {
           ...loaded,
           snapshot: old.snapshot.id === loaded.snapshot.id ? old.snapshot : loaded.snapshot,
         };
         current.current = updated;
         setSession(updated);
+        setCapture(null);
         setError("");
       });
     } catch {
@@ -116,7 +151,7 @@ function useSession() {
     setBusy(true);
     try {
       const snapshot = await client.current!.snapshot(id);
-      const next = { ...current.current!, snapshot };
+      const next: ReadySession = { ...current.current!, status: "ready", snapshot };
       current.current = next;
       setSession(next);
     } catch (e: any) {
@@ -127,6 +162,7 @@ function useSession() {
   }
   return {
     session,
+    capture,
     error,
     busy,
     view,

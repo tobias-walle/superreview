@@ -417,7 +417,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     ref,
     () => ({
       scrollToAnchor(a) {
-        const file = meta.findIndex((m) => m.fingerprint === a.fingerprint);
+        const file = files.findIndex((candidate) => candidate.fingerprint === a.fingerprint);
         if (file < 0) return;
         navigationTarget.current = file;
         setCollapsed((old) => {
@@ -432,8 +432,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         setPendingComment(a);
       },
       scrollToFile(index) {
-        if (starts[index] === undefined) return;
         navigationTarget.current = index;
+        if (starts[index] === undefined) return;
         setCollapsed((old) => {
           if (!old.has(index)) return old;
           const next = new Set(old);
@@ -443,8 +443,13 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         virtual.scrollToIndex(starts[index], { align: "start" });
       },
     }),
-    [starts, virtual, meta],
+    [starts, virtual, files],
   );
+  useEffect(() => {
+    const target = navigationTarget.current;
+    if (target !== undefined && starts[target] !== undefined)
+      virtual.scrollToIndex(starts[target], { align: "start" });
+  }, [starts, virtual]);
   useEffect(() => {
     if (!pendingComment) return;
     const a = pendingComment;

@@ -37,13 +37,21 @@ export default function Home() {
 function ReviewLoader() {
   const runtime = useReviewSession();
   if (runtime.session) return <Workspace />;
+  const progress = runtime.capture;
+  const message = progress
+    ? progress.phase === "discovering"
+      ? "Finding changed files…"
+      : progress.total
+        ? `${progress.phase === "saving" ? "Saving" : progress.phase === "diffing" ? "Preparing" : "Capturing"} changes · ${progress.completed} of ${progress.total}`
+        : "Capturing changes…"
+    : "Opening review…";
   return (
     <div className="review-loading">
       <GitCompareArrows />
       <h1>superreview</h1>
-      <p role={runtime.error ? "alert" : "status"}>{runtime.error || "Opening review…"}</p>
+      <p role={runtime.error ? "alert" : "status"}>{runtime.error || message}</p>
       {runtime.error && (
-        <button className="control" onClick={() => location.reload()}>
+        <button className="control" onClick={() => void runtime.refresh()}>
           Try again
         </button>
       )}
@@ -85,6 +93,7 @@ function Workspace() {
   const chooseFile = useCallback(
     (file: number) => {
       if (file < 0 || file >= data.files.length) return;
+      setSelected(file);
       setFileDrawerOpen(false);
       diffRef.current?.scrollToFile(file);
     },
@@ -120,7 +129,7 @@ function Workspace() {
               repository={data.repository}
               selected={selected}
               viewed={progress.viewed}
-              ready={model.meta.length > 0}
+              readyFiles={model.meta.length}
               drawerOpen={fileDrawerOpen}
               width={sidebars.file.width}
               resizeBounds={sidebars.file.bounds}

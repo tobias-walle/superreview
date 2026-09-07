@@ -35,7 +35,7 @@ function ChangedFilesContent({
   repository,
   selected,
   viewed,
-  ready,
+  readyFiles,
   onSelect,
   onToggleViewed,
 }: {
@@ -43,7 +43,7 @@ function ChangedFilesContent({
   repository: string;
   selected: number;
   viewed: boolean[];
-  ready: boolean;
+  readyFiles: number;
   onSelect: (file: number) => void;
   onToggleViewed: (file: number, viewed: boolean) => void;
 }) {
@@ -73,7 +73,7 @@ function ChangedFilesContent({
         onSelect={onSelect}
         viewed={viewed}
         onToggle={onToggleViewed}
-        ready={ready}
+        readyFiles={readyFiles}
       />
       <div className="side-bottom">
         <Terminal />
@@ -88,7 +88,7 @@ export function ChangedFilesSidebar({
   repository,
   selected,
   viewed,
-  ready,
+  readyFiles,
   drawerOpen,
   width,
   resizeBounds,
@@ -101,7 +101,7 @@ export function ChangedFilesSidebar({
   repository: string;
   selected: number;
   viewed: boolean[];
-  ready: boolean;
+  readyFiles: number;
   drawerOpen: boolean;
   width: number;
   resizeBounds: ResizeBounds;
@@ -116,7 +116,7 @@ export function ChangedFilesSidebar({
       repository={repository}
       selected={selected}
       viewed={viewed}
-      ready={ready}
+      readyFiles={readyFiles}
       onSelect={onSelect}
       onToggleViewed={onToggleViewed}
     />

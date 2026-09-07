@@ -3,6 +3,11 @@ import type { ReviewData } from "../diff/render";
 
 export type FileVersion = { object: string | null; mode: string };
 export type Evidence = { before: FileVersion; after: FileVersion; key: string };
+export type CaptureProgress = {
+  phase: "discovering" | "capturing" | "diffing" | "saving";
+  completed: number;
+  total: number;
+};
 export type ComparisonSpec = {
   refs: string[];
   paths: string[];
@@ -81,12 +86,25 @@ export type Event = {
   | { type: "snapshot"; snapshotId: string }
   | { type: "archive"; archived: boolean }
 );
-export type Session = {
+type SessionBase = {
   state: ReviewState;
-  snapshot: Snapshot;
   drafts: Draft[];
   draftRevision: number;
 };
+export type ReadySession = SessionBase & {
+  status: "ready";
+  snapshot: Snapshot;
+};
+export type Session =
+  | ReadySession
+  | (SessionBase & {
+      status: "capturing";
+      progress: CaptureProgress;
+    })
+  | (SessionBase & {
+      status: "error";
+      error: string;
+    });
 /** The UI talks to one port. Persistence and transport stay outside React. */
 export interface ReviewClient {
   load(): Promise<Session>;

@@ -21,9 +21,20 @@ export function useDiffModel(files: ReviewFile[]) {
     });
     worker.current = w;
     w.onmessage = ({ data }) => {
+      if (data.type === "file-ready") {
+        setModelFiles(files);
+        setMeta((current) => {
+          if (data.index === 0) return [data.metadata];
+          const next = current.slice();
+          next[data.index] = data.metadata;
+          return next;
+        });
+        setFailure(null);
+        setPreparationMs(data.preparationMs);
+      }
       if (data.type === "ready") {
         setModelFiles(files);
-        setMeta(data.files);
+        if (!files.length) setMeta(EMPTY);
         setFailure(null);
         setPreparationMs(data.preparationMs);
       }

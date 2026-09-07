@@ -19,7 +19,7 @@ pnpm link:global
 
 The link follows the checkout. Run `pnpm build` after source changes.
 
-The CLI opens a browser and binds to a random port on 127.0.0.1. Keep the terminal running. Ctrl+C stops the server; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port.
+The CLI opens a browser and binds to a random port on 127.0.0.1. The browser shell opens before Git capture finishes and shows capture progress for large comparisons. Keep the terminal running. Ctrl+C stops the server after any in-flight immutable capture finishes; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port.
 
 ```sh
 superreview                         # HEAD vs working tree; staged + unstaged + untracked
@@ -45,7 +45,7 @@ superreview export <id> --submission 1
 
 Review IDs are stable. Working-tree and HEAD comparisons on the same branch/worktree resume its latest active review. Explicit comparisons against another branch have their own binding. Use `superreview --review <id> main...HEAD` to attach a different comparison to a chosen review. `open` restores the captured diff even after the source branch changes or disappears. Archive keeps history and can be reversed. Linked worktrees keep their own `.superreview` directory.
 
-Use `--json` for machine-readable output. Diagnostics go to stderr. Color follows the terminal and `NO_COLOR`; override it with `--color=always` or `--color=never`.
+Use `--json` for machine-readable output. Serve output always includes `url`, `reviewId`, `title`, and `status`. Fresh captures initially report `status: "capturing"`; `/api/session` changes to `status: "ready"` when the immutable snapshot is available. `superreview open` can report the saved `snapshotId` and file count immediately. Diagnostics go to stderr. Color follows the terminal and `NO_COLOR`; override it with `--color=always` or `--color=never`.
 
 ## Reviewing your agent's work
 
@@ -100,7 +100,7 @@ The CLI adds `.superreview` to the repository's local Git exclude file. It does 
 
 Interrupted final JSONL writes are preserved in an `interrupted-*.jsonl` file and removed from the active log on recovery. Corrupt middle records fail visibly. Only one server writes at a time; close it before running another CLI writer. Multiple browser tabs detect stale updates and ask for a reload rather than overwrite feedback.
 
-Renames currently appear as deletion and addition. Merge conflicts must be resolved before capture. Binary files, mode-only changes, and submodule pointer changes have file-level review markers; they do not offer text line comments. Word-level matching follows the delta approach, with bounded fallback for pathological lines. Git histogram generates the line diff. Very large captures use disk objects and virtualized rendering; the current capture adapter still holds each text diff in memory.
+Renames currently appear as deletion and addition. Merge conflicts must be resolved before capture. Binary files, mode-only changes, and submodule pointer changes have file-level review markers; they do not offer text line comments. Word-level matching follows the delta approach, with a capture-wide budget and bounded fallback for pathological lines. Git histogram generates the line diff. Capture batches Git metadata and objects, then diffs opaque temporary files in one process. Very large captures use disk objects, progressive worker preparation, and virtualized rendering; the capture adapter still holds the complete parsed text diff in memory.
 
 ## Agent skill
 

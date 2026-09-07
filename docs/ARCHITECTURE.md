@@ -18,7 +18,9 @@ Snapshots are separate from events. They hold the exact displayed diff and a man
 
 Messages can have a human or agent author. The author type is stored separately from the display name. Old events without author data stay valid and render as an unknown legacy author. Headless comment and reply commands use the active server queue when available. Otherwise, they use the same repository lock and `JsonlStore` command path as the server. Stable request IDs make retries idempotent. Snapshot validation rejects stale or invented comment locations.
 
-The bundled SPA retains its virtual diff worker and block cache. Code rows and file-tree entries are virtualized; viewport coverage excludes overscan. Submitting a comment changes review state without replacing the snapshot or rebuilding the diff worker. Submission history renders only when requested. The core and adapters can be extracted as packages later if a second consumer actually needs that split.
+The CLI binds the loopback server and opens the browser before starting an initial capture. `/api/session` exposes capturing, ready, and error states, so the browser shell remains responsive while Git work runs asynchronously. Capture batches tree/index metadata and object reads, stores exact content evidence, and runs one histogram directory diff over opaque temporary names. Only the completed immutable snapshot becomes an append-only event.
+
+The bundled SPA retains its virtual diff worker and block cache. The worker publishes file models progressively and shares one bounded word-diff budget across the capture, allowing the first file to render without preparing every later file first. Code rows and file-tree entries are virtualized; viewport coverage excludes overscan. Submitting a comment changes review state without replacing the snapshot or rebuilding the diff worker. Submission history renders only when requested. The core and adapters can be extracted as packages later if a second consumer actually needs that split.
 
 ## Future seams
 

@@ -156,6 +156,32 @@ test("Git captures staged, unstaged, untracked, deleted and symlink changes with
     const deleted = await capture(root, local, store);
     assert.equal(deleted.evidence["auth.ts"].after.object, null);
   }));
+test("batched capture preserves mixed files and unusual paths", async () =>
+  fixture(async (root, store) => {
+    const paths = ["space name.ts", "tab\tname.ts", 'quote"name.ts', "line\nname.ts"];
+    for (const path of paths) await writeFile(join(root, path), "before\n");
+    await writeFile(join(root, "deleted.ts"), "remove me\n");
+    git(root, ["add", "."]);
+    git(root, ["commit", "-m", "mixed base"]);
+    for (const path of paths) await writeFile(join(root, path), `after ${JSON.stringify(path)}\n`);
+    await rm(join(root, "deleted.ts"));
+    await writeFile(join(root, "binary.bin"), Buffer.from([0, 1, 2]));
+    await chmod(join(root, "auth.ts"), 0o755);
+    const snap = await capture(root, local, store);
+    assert.deepEqual(
+      snap.data.files.map((file) => file.path).sort(),
+      [...paths, "auth.ts", "binary.bin", "deleted.ts"].sort(),
+    );
+    for (const path of paths) {
+      const file = snap.data.files.find((candidate) => candidate.path === path)!;
+      assert.equal(file.additions, 1);
+      assert.equal(file.deletions, 1);
+      assert.match(JSON.stringify(file.hunks), /after/);
+    }
+    assert.equal(snap.data.files.find((file) => file.path === "binary.bin")!.binary, true);
+    assert.equal(snap.evidence["deleted.ts"].after.object, null);
+    assert.match(snap.data.files.find((file) => file.path === "auth.ts")!.changeSummary!, /100755/);
+  }));
 test("two-dot uses endpoints; three-dot uses merge base; single revision compares working tree", async () =>
   fixture(async (root, store) => {
     git(root, ["checkout", "-b", "feature"]);
@@ -339,6 +365,58 @@ test("HTTP lifecycle persists comment, reply, submission, history and rejects cr
       assert.equal(history.status, 200);
     } finally {
       await new Promise<void>((r) => server.close(() => r()));
+    }
+  }));
+test("server serves the browser shell before initial capture finishes", async () =>
+  fixture(async (root, store) => {
+    await writeFile(join(root, "index.html"), "<!doctype html><title>shell</title>");
+    await writeFile(join(root, "auth.ts"), "captured later\n");
+    const { server, url, startCapture } = await startServer({
+      store,
+      root,
+      comparison: local,
+      web: root,
+      port: 0,
+      initialCapture: true,
+    });
+    try {
+      const pending: any = await (await fetch(url + "/api/session")).json();
+      assert.equal(pending.status, "capturing");
+      assert.equal(await (await fetch(url)).text(), "<!doctype html><title>shell</title>");
+      const captureTask = startCapture();
+      assert.strictEqual(startCapture(), captureTask, "overlapping refreshes share one capture");
+      const ready = await captureTask;
+      assert.equal(ready.status, "ready");
+      assert.equal(ready.snapshot.data.files[0].path, "auth.ts");
+      await store.execute(
+        { type: "archive", archived: true },
+        store.state.sequence,
+        "archive-before-refresh",
+      );
+      const archivedSequence = store.state.sequence;
+      await assert.rejects(() => startCapture(), /read-only/);
+      assert.equal(store.state.sequence, archivedSequence, "archived capture appends no snapshot");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }));
+test("failed initial capture can be retried without restarting the server", async () =>
+  fixture(async (root, store) => {
+    const { server, startCapture } = await startServer({
+      store,
+      root,
+      comparison: { ...local, refs: ["later"] },
+      web: root,
+      port: 0,
+      initialCapture: true,
+    });
+    try {
+      await assert.rejects(() => startCapture(), /Cannot resolve/);
+      git(root, ["branch", "later"]);
+      const ready = await startCapture();
+      assert.equal(ready.status, "ready");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   }));
 test("CLI parser handles review creation and agent feedback commands", () => {
@@ -551,7 +629,18 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
           }),
       };
     }
+    const waitForReady = async (url: string) => {
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        const session: any = await (await fetch(url + "/api/session")).json();
+        if (session.status === "ready") return session;
+        if (session.status === "error") throw new Error(session.error);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error("Capture did not finish");
+    };
     const first = await launch(["--new", "--name", "CLI round"]);
+    assert.equal(first.status, "capturing");
     const post = async (url: string, path: string, value: unknown) =>
       fetch(url + path, {
         method: "POST",
@@ -563,7 +652,7 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
       assert.match(html, /<title>Superreview<\/title>/);
       const script = html.match(/src="([^"]+\.js)"/)![1];
       assert.equal((await fetch(first.url + script)).status, 200);
-      const session: any = await (await fetch(first.url + "/api/session")).json();
+      const session = await waitForReady(first.url);
       assert.ok(session.snapshot.data.files.some((f: any) => f.path === "auth.ts"));
       const comment = JSON.parse(
         execFileSync(

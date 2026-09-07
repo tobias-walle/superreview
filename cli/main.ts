@@ -257,13 +257,12 @@ async function main() {
       return;
     }
     const savedComparison: Comparison =
-      options.command === "open"
+      options.command === "open" && store.state.snapshotId
         ? (await store.snapshot(store.state.snapshotId)).comparison ||
           JSON.parse(store.state.identity.binding.comparison || comparisonKey)
         : comparison;
-    if (options.command !== "open" || !store.state.snapshotId)
-      await store.capture(await capture(repo.root, savedComparison, store));
     if (options.command === "create") {
+      await store.capture(await capture(repo.root, savedComparison, store));
       const snapshot = await store.snapshot(store.state.snapshotId);
       console.log(
         options.json
@@ -277,30 +276,32 @@ async function main() {
       );
       return;
     }
-    const { server, url } = await startServer({
+    const initialCapture = options.command !== "open" || !store.state.snapshotId;
+    const { server, url, startCapture } = await startServer({
       store,
       root: repo.root,
       comparison: savedComparison,
       web: join(dirname(fileURLToPath(import.meta.url)), "web"),
       port: options.port,
       qaOrigin: process.env.SUPERREVIEW_QA_ORIGIN,
+      initialCapture,
     });
     running = true;
     await atomicJson(join(root, "writer.lock", "server.json"), { url, reviewId: store.id });
-    const snapshot = await store.snapshot(store.state.snapshotId);
+    const snapshot = initialCapture ? undefined : await store.snapshot(store.state.snapshotId);
     if (options.json)
       console.log(
         JSON.stringify({
           url,
           reviewId: store.id,
           title: store.state.identity.title,
-          snapshotId: snapshot.id,
-          files: snapshot.data.files.length,
+          status: initialCapture ? "capturing" : "ready",
+          ...(snapshot ? { snapshotId: snapshot.id, files: snapshot.data.files.length } : {}),
         }),
       );
     else
       console.log(
-        `\n${paint("superreview", 35)}  ${repo.branch}\n${store.state.identity.title}  ${paint(store.id, 90)}\n${snapshot.data.files.length} changed files · ${store.state.submissions.length} submissions\n\n${paint(url, 36)}\n${paint("Ctrl+C to stop · review saved locally", 90)}\n`,
+        `\n${paint("superreview", 35)}  ${repo.branch}\n${store.state.identity.title}  ${paint(store.id, 90)}\n${snapshot ? `${snapshot.data.files.length} changed files` : "Preparing changes…"} · ${store.state.submissions.length} submissions\n\n${paint(url, 36)}\n${paint("Ctrl+C to stop · review saved locally", 90)}\n`,
       );
     if (options.open) {
       const [program, args] =
@@ -316,10 +317,23 @@ async function main() {
       child.on("error", () => {});
       child.unref();
     }
-    const stop = () =>
+    const captureTask = initialCapture
+      ? startCapture().catch((error) => {
+          console.error(
+            options.json
+              ? JSON.stringify({ error: error.message })
+              : `superreview: ${error.message}`,
+          );
+        })
+      : Promise.resolve();
+    let stopping = false;
+    const stop = () => {
+      if (stopping) return;
+      stopping = true;
       server.close(() => {
-        void unlock().then(() => process.exit(0));
+        void captureTask.finally(() => unlock().then(() => process.exit(0)));
       });
+    };
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
   } finally {

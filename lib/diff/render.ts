@@ -31,7 +31,14 @@ export type ReviewData = {
   branch: string;
   files: ReviewFile[];
 };
-export function renderHunk(h: Hunk) {
+const WORD_DIFF_CELL_BUDGET = 2_000_000;
+const WORD_DIFF_PAIR_BUDGET = 2000;
+export type WordDiffBudget = { cells: number; pairs: number };
+export const createWordDiffBudget = (): WordDiffBudget => ({
+  cells: WORD_DIFF_CELL_BUDGET,
+  pairs: WORD_DIFF_PAIR_BUDGET,
+});
+export function renderHunk(h: Hunk, budget = createWordDiffBudget()) {
   let oldNo = h.oldStart,
     newNo = h.newStart;
   const lines: DiffLine[] = h.lines
@@ -48,8 +55,6 @@ export function renderHunk(h: Hunk) {
       };
     });
   const split: [DiffLine | undefined, DiffLine | undefined][] = [];
-  let remainingCells = 2_000_000;
-  let remainingPairs = 2000;
   let simplified = false;
   for (let i = 0; i < lines.length;) {
     const l = lines[i];
@@ -68,12 +73,12 @@ export function renderHunk(h: Hunk) {
       let matched = false;
       for (let j = pi; j < Math.min(plus.length, pi + 24); j++) {
         const cells = (a.text.length + 2) * (plus[j].text.length + 2);
-        if (remainingPairs <= 0 || cells > remainingCells) {
+        if (budget.pairs <= 0 || cells > budget.cells) {
           simplified = true;
           break;
         }
-        remainingPairs--;
-        remainingCells -= cells;
+        budget.pairs--;
+        budget.cells -= cells;
         const wd = wordDiff(a.text, plus[j].text);
         if (wd.distance <= 0.6) {
           while (pi < j) split.push([undefined, plus[pi++]]);
@@ -103,8 +108,8 @@ export type HunkMeta = {
   simplified: boolean;
 };
 export type FileMeta = { fingerprint: string; hunks: HunkMeta[] };
-export function buildFileModel(file: ReviewFile) {
-  const hunks = file.hunks.map(renderHunk);
+export function buildFileModel(file: ReviewFile, budget = createWordDiffBudget()) {
+  const hunks = file.hunks.map((hunk) => renderHunk(hunk, budget));
   const metadata: FileMeta = {
     fingerprint: "",
     hunks: hunks.map((h, hi) => {

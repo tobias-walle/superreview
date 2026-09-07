@@ -121,14 +121,14 @@ export function FileTree({
   onSelect,
   viewed,
   onToggle,
-  ready,
+  readyFiles,
 }: {
   files: ReviewFile[];
   selected: number;
   onSelect: (n: number) => void;
   viewed: boolean[];
   onToggle: (n: number, value: boolean) => void;
-  ready: boolean;
+  readyFiles: number;
 }) {
   const comments = useComments();
   const root = useRef<HTMLDivElement>(null);
@@ -208,7 +208,6 @@ export function FileTree({
               ) : (
                 <>
                   <SidebarMenuButton
-                    disabled={!ready}
                     className={`tree-file ${viewed[e.file] ? "is-viewed" : ""}`}
                     isActive={selected === e.file}
                     aria-current={selected === e.file ? "true" : undefined}
@@ -243,7 +242,7 @@ export function FileTree({
                   <Checkbox
                     className="tree-viewed"
                     checked={!!viewed[e.file]}
-                    disabled={!ready}
+                    disabled={e.file >= readyFiles}
                     onCheckedChange={(value) => onToggle(e.file, value === true)}
                     aria-label={`Viewed ${files[e.file].path}`}
                     title={viewed[e.file] ? "Mark unviewed" : "Mark viewed"}
