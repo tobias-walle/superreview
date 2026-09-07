@@ -1,6 +1,10 @@
 import { build } from "esbuild";
 import { mkdir, writeFile, copyFile, chmod, readFile, readdir, cp } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+
+const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
+const version = process.env.SUPERREVIEW_VERSION ?? rootPackage.version;
+
 await mkdir("dist-cli", { recursive: true });
 await build({
   entryPoints: ["cli/main.ts"],
@@ -9,6 +13,7 @@ await build({
   platform: "node",
   target: "node22",
   format: "esm",
+  define: { __SUPERREVIEW_VERSION__: JSON.stringify(version) },
   banner: { js: "#!/usr/bin/env node" },
 });
 const viteArgs = process.argv.includes("--quiet") ? ["build", "--logLevel", "error"] : ["build"];
@@ -21,27 +26,38 @@ await writeFile(
   "dist-cli/package.json",
   JSON.stringify(
     {
-      name: "superreview",
-      version: "0.2.1",
-      description: "A local Git review workspace with persistent review rounds",
+      name: rootPackage.name,
+      version,
+      description: rootPackage.description,
       type: "module",
-      bin: { superreview: "./superreview.mjs" },
-      engines: { node: ">=22.13.0" },
+      bin: { superreview: "superreview.mjs" },
+      engines: rootPackage.engines,
+      repository: rootPackage.repository,
+      homepage: rootPackage.homepage,
+      bugs: rootPackage.bugs,
+      keywords: rootPackage.keywords,
+      author: rootPackage.author,
+      license: rootPackage.license,
+      publishConfig: {
+        access: "public",
+        registry: "https://registry.npmjs.org/",
+      },
       files: [
         "superreview.mjs",
         "web",
         "skill-data",
         "skills",
         "README.md",
+        "LICENSE",
         "THIRD_PARTY_NOTICES.md",
       ],
-      license: "UNLICENSED",
     },
     null,
     2,
   ),
 );
 await copyFile("docs/CLI.md", "dist-cli/README.md");
+await copyFile("LICENSE", "dist-cli/LICENSE");
 
 // Preserve license texts for bundled dependencies in the distributable package.
 let notices = await readFile("THIRD_PARTY_NOTICES.md", "utf8");

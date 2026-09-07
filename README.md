@@ -24,18 +24,13 @@ Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your
 
 ## Installation
 
-**Not published to npm yet. Coming soon.** For now, install from a source checkout.
-
-You’ll need Node.js 22.13 or newer, Git, and pnpm. From the Superreview checkout:
+You’ll need Node.js 22.13 or newer and Git. Install Superreview from npm:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm link:global
+npm install --global superreview
 ```
 
 Then switch to the repository you want to review and run `superreview`.
-
-The installed command follows this checkout. Run `pnpm build` after updating the source.
 
 ## Common workflows
 
@@ -104,3 +99,4 @@ Pass CLI options directly, for example `pnpm dev --no-open main...HEAD`.
 - [CLI workflows and local storage](docs/CLI.md)
 - [Architecture and extension boundaries](docs/ARCHITECTURE.md)
 - [Release verification](docs/TESTING.md)
+- [Publishing releases](docs/RELEASING.md)

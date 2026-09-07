@@ -60,6 +60,7 @@ const rootInputs = [
   ".oxfmtrc.json",
   "postcss.config.mjs",
   "vite.config.ts",
+  "release.config.mjs",
 ];
 const codeInputs = [
   "adapters/**/*.{ts,tsx,mjs}",
@@ -77,6 +78,7 @@ const buildInputs = [
   "skill-data/**/*",
   "skills/**/*",
   "docs/CLI.md",
+  "LICENSE",
   "THIRD_PARTY_NOTICES.md",
   ...rootInputs,
 ];

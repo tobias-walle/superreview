@@ -1,3 +1,5 @@
+import { version } from "./version";
+
 export function parseArgs(args: string[]) {
   const options = {
     refs: [] as string[],
@@ -66,7 +68,7 @@ export function parseArgs(args: string[]) {
     throw new Error("Specify a review ID. Use superreview list.");
   return options;
 }
-export const help = `superreview 0.2.1 — review changes, keep the conversation
+export const help = `superreview ${version} — review changes, keep the conversation
 
   superreview                         Working tree vs HEAD, including untracked
   superreview main                    Working tree vs main

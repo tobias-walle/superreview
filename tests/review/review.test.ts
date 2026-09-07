@@ -416,6 +416,11 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
   fixture(async (root) => {
     // Exercise the distributable binary, not imports of its entry point.
     const binary = resolve("dist-cli/superreview.mjs");
+    const packageMetadata = JSON.parse(await readFile(resolve("package.json"), "utf8"));
+    assert.equal(
+      execFileSync(process.execPath, [binary, "--version"], { encoding: "utf8" }).trim(),
+      packageMetadata.version,
+    );
     await writeFile(join(root, "auth.ts"), "cli change\n");
     async function launch(args: string[]) {
       const child = spawn(process.execPath, [binary, ...args, "--no-open", "--json"], {

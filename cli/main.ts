@@ -5,6 +5,7 @@ import { mkdir, readFile, appendFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { readSkill } from "./skill";
 import { parseArgs, help } from "./args";
+import { version } from "./version";
 import { repository, capture, git, type Comparison } from "../adapters/node/git";
 import { JsonlStore, atomicJson, listReviews, lockRepository } from "../adapters/node/jsonl-store";
 import { startServer } from "../adapters/node/server";
@@ -16,7 +17,7 @@ async function main() {
     return;
   }
   if (options.command === "version") {
-    console.log("0.2.1");
+    console.log(version);
     return;
   }
   if (options.command === "skill") {
