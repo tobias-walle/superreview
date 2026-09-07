@@ -30,6 +30,9 @@ type Item = {
   block?: number;
   meta?: BlockMeta;
 };
+const MOBILE_VIEWPORT_MAX_WIDTH_PX = 767;
+const DESKTOP_FILE_HEADER_GAP_PX = 18;
+const MOBILE_FILE_HEADER_GAP_PX = 14;
 type Props = {
   preparationMs: number;
   files: ReviewFile[];
@@ -108,6 +111,14 @@ const CodeBlock = memo(function CodeBlock({
     </div>
   );
 });
+function FilePath({ path }: { path: string }) {
+  return (
+    <div className="file-path" title={path}>
+      <span>{path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : ""}</span>
+      {path.split("/").at(-1)}
+    </div>
+  );
+}
 function ViewedControl({
   file,
   path,
@@ -153,6 +164,73 @@ function ViewedControl({
     </div>
   );
 }
+function FileHeader({
+  fileIndex,
+  file,
+  collapsed,
+  viewed,
+  manual,
+  copied,
+  className = "",
+  onToggleCollapsed,
+  onToggleViewed,
+  onResume,
+  onCopy,
+}: {
+  fileIndex: number;
+  file: ReviewFile;
+  collapsed: boolean;
+  viewed: boolean;
+  manual: boolean;
+  copied: boolean;
+  className?: string;
+  onToggleCollapsed: (file: number) => void;
+  onToggleViewed: Props["onToggle"];
+  onResume: Props["onResume"];
+  onCopy: (file: number, path: string) => void;
+}) {
+  return (
+    <div className={`file-header ${className}`}>
+      <button
+        className="icon-button"
+        aria-label={`${collapsed ? "Expand" : "Collapse"} ${file.path}`}
+        aria-expanded={!collapsed}
+        onClick={() => onToggleCollapsed(fileIndex)}
+      >
+        {collapsed ? <ChevronRight /> : <ChevronDown />}
+      </button>
+      <FileIcon path={file.path} />
+      <FilePath path={file.path} />
+      {file.changedSinceReview && !viewed && (
+        <span className="changed-badge">Changed since review</span>
+      )}
+      {file.changeSummary && (
+        <span className="file-change-summary" title={file.changeSummary}>
+          {file.changeSummary}
+        </span>
+      )}
+      <div className="stats">
+        <span className="stat plus">+{file.additions}</span>
+        <span className="stat minus">−{file.deletions}</span>
+      </div>
+      <ViewedControl
+        file={fileIndex}
+        path={file.path}
+        viewed={viewed}
+        manual={manual}
+        onToggle={onToggleViewed}
+        onResume={onResume}
+      />
+      <button
+        className="icon-button copy-path"
+        aria-label={`Copy path ${file.path}`}
+        onClick={() => onCopy(fileIndex, file.path)}
+      >
+        {copied ? <Check /> : <Copy />}
+      </button>
+    </div>
+  );
+}
 export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousDiff(props, ref) {
   const {
     files,
@@ -179,6 +257,21 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const anchor = useRef<Item | undefined>(undefined);
   const previousLayout = useRef("");
   const navigationTarget = useRef<number | undefined>(undefined);
+  const toggleCollapsed = useCallback((file: number) => {
+    setCollapsed((old) => {
+      const next = new Set(old);
+      if (next.has(file)) next.delete(file);
+      else next.add(file);
+      return next;
+    });
+  }, []);
+  const copyPath = useCallback(async (file: number, path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopied(file);
+      setTimeout(() => setCopied(-1), 1200);
+    } catch {}
+  }, []);
   useEffect(() => {
     if (!root.current) return;
     const observer = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
@@ -254,6 +347,22 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     useAnimationFrameWithResizeObserver: true,
   });
   const visible = virtual.getVirtualItems();
+  const scrollTop = root.current?.scrollTop || 0;
+  const topVirtualItem = visible.find((item) => item.end > scrollTop + 2);
+  let stickyFileIndex: number | undefined;
+  if (topVirtualItem) {
+    const topItem = items[topVirtualItem.index];
+    const headerGap =
+      typeof window !== "undefined" && window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH_PX
+        ? MOBILE_FILE_HEADER_GAP_PX
+        : DESKTOP_FILE_HEADER_GAP_PX;
+    if (topItem.kind !== "header" || scrollTop >= topVirtualItem.start + headerGap) {
+      stickyFileIndex = topItem.file;
+    } else if (topVirtualItem.index > 0) {
+      stickyFileIndex = items[topVirtualItem.index - 1].file;
+    }
+  }
+  const stickyFile = stickyFileIndex === undefined ? undefined : files[stickyFileIndex];
   const keys = visible
     .filter((v) => items[v.index]?.kind === "block")
     .map((v) => items[v.index].key)
@@ -406,6 +515,23 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
             } as React.CSSProperties
           }
         >
+          {stickyFile && stickyFileIndex !== undefined && (
+            <div className="sticky-file-context">
+              <FileHeader
+                className="sticky-file-header"
+                fileIndex={stickyFileIndex}
+                file={stickyFile}
+                collapsed={collapsed.has(stickyFileIndex)}
+                viewed={!!viewed[stickyFileIndex]}
+                manual={!!manual[stickyFileIndex]}
+                copied={copied === stickyFileIndex}
+                onToggleCollapsed={toggleCollapsed}
+                onToggleViewed={onToggle}
+                onResume={onResume}
+                onCopy={copyPath}
+              />
+            </div>
+          )}
           {visible.map((v) => {
             const item = items[v.index],
               file = files[item.file];
@@ -427,65 +553,18 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                   <div
                     className={`stream-file-header ${collapsed.has(item.file) ? "collapsed" : ""}`}
                   >
-                    <div className="file-header">
-                      <button
-                        className="icon-button"
-                        aria-label={`${collapsed.has(item.file) ? "Expand" : "Collapse"} ${file.path}`}
-                        aria-expanded={!collapsed.has(item.file)}
-                        onClick={() =>
-                          setCollapsed((old) => {
-                            const next = new Set(old);
-                            if (next.has(item.file)) next.delete(item.file);
-                            else next.add(item.file);
-                            return next;
-                          })
-                        }
-                      >
-                        {collapsed.has(item.file) ? <ChevronRight /> : <ChevronDown />}
-                      </button>
-                      <FileIcon path={file.path} />
-                      <div className="file-path" title={file.path}>
-                        <span>
-                          {file.path.includes("/")
-                            ? file.path.slice(0, file.path.lastIndexOf("/") + 1)
-                            : ""}
-                        </span>
-                        {file.path.split("/").at(-1)}
-                      </div>
-                      {file.changedSinceReview && !viewed[item.file] && (
-                        <span className="changed-badge">Changed since review</span>
-                      )}
-                      {file.changeSummary && (
-                        <span className="file-change-summary" title={file.changeSummary}>
-                          {file.changeSummary}
-                        </span>
-                      )}
-                      <div className="stats">
-                        <span className="stat plus">+{file.additions}</span>
-                        <span className="stat minus">−{file.deletions}</span>
-                      </div>
-                      <ViewedControl
-                        file={item.file}
-                        path={file.path}
-                        viewed={!!viewed[item.file]}
-                        manual={!!manual[item.file]}
-                        onToggle={onToggle}
-                        onResume={onResume}
-                      />
-                      <button
-                        className="icon-button copy-path"
-                        aria-label={`Copy path ${file.path}`}
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(file.path);
-                            setCopied(item.file);
-                            setTimeout(() => setCopied(-1), 1200);
-                          } catch {}
-                        }}
-                      >
-                        {copied === item.file ? <Check /> : <Copy />}
-                      </button>
-                    </div>
+                    <FileHeader
+                      fileIndex={item.file}
+                      file={file}
+                      collapsed={collapsed.has(item.file)}
+                      viewed={!!viewed[item.file]}
+                      manual={!!manual[item.file]}
+                      copied={copied === item.file}
+                      onToggleCollapsed={toggleCollapsed}
+                      onToggleViewed={onToggle}
+                      onResume={onResume}
+                      onCopy={copyPath}
+                    />
                     {mode === "split" && !collapsed.has(item.file) && !file.binary && (
                       <div className="diff-columns">
                         <span>

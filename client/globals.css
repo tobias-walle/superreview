@@ -1071,9 +1071,23 @@ button {
   color: var(--overlay);
 }
 .continuous-scroll {
+  --sticky-file-header-height: 46px;
   padding: 0 !important;
   overflow-anchor: none;
   contain: strict;
+}
+.sticky-file-context {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: var(--sticky-file-header-height);
+}
+.sticky-file-header {
+  height: var(--sticky-file-header-height);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--crust) 25%, transparent);
 }
 .diff-canvas {
   position: relative;
@@ -1176,6 +1190,12 @@ button {
   color: var(--subtext);
 }
 @media (max-width: 767px) {
+  .continuous-scroll {
+    --sticky-file-header-height: 44px;
+  }
+  .sticky-file-header {
+    gap: 4px;
+  }
   .diff-canvas {
     margin: 0 10px;
   }
@@ -1195,7 +1215,8 @@ button {
   .stream-file-header .copy-path {
     display: none;
   }
-  .stream-file-header .file-path {
+  .stream-file-header .file-path,
+  .sticky-file-header .file-path {
     flex: 1;
   }
   .stream-file-header .file-header > .icon-button {
