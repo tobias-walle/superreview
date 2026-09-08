@@ -5,7 +5,13 @@ const point = z.object({
   line: z.number().int().nonnegative(),
   text: z.string(),
 });
+const author = z.object({
+  id: z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
+  kind: z.enum(["human", "agent"]),
+});
 const anchor = z.object({
+  kind: z.enum(["line", "file"]).optional(),
   snapshotId: z.string().optional(),
   path: z.string().min(1),
   fingerprint: z.string(),
@@ -19,14 +25,19 @@ export const threadSchema = z.object({
   anchor,
   created: z.number(),
   resolved: z.boolean().optional(),
+  resolvedAt: z.number().optional(),
+  resolvedBy: author.optional(),
   messages: z
     .array(
       z.object({
         id: z.string(),
         body: z.string().max(30000),
         created: z.number(),
+        author: author.optional(),
         edited: z.number().optional(),
+        editedBy: author.optional(),
         deleted: z.boolean().optional(),
+        deletedBy: author.optional(),
       }),
     )
     .max(10000),

@@ -17,7 +17,7 @@ Superreview opens in your browser:
 
 1. Browse changes in unified or split view.
 2. Add line comments or select a range to comment on. Files are marked viewed as you read them, or you can mark them manually.
-3. Submit a feedback round and choose **Copy as Markdown** to share it.
+3. Submit a feedback round and choose **Copy agent task** or **Copy as Markdown** to share it.
 4. After more edits, refresh and use **Since reviewed** to focus on remaining changes.
 
 Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your review stays saved.
@@ -55,6 +55,18 @@ superreview main...HEAD
 ```
 
 Review, comment, and submit a round. Copy the feedback from the submission dialog or **History** to share it. After new commits arrive, run the same command again to update the review.
+
+### Create or update a review from an agent
+
+The CLI supports the complete local agent workflow without browser automation:
+
+```sh
+superreview create main...HEAD --name "Auth review" --json
+superreview threads <id> --json
+superreview reply <id> <thread-id> --body "Fixed and tested." --json
+```
+
+Agent comments and replies are marked with an **Agent** badge. The human reviewer keeps control of submission and resolution. See the [CLI guide](docs/CLI.md#headless-agent-workflow) for line comments and safe writes.
 
 ### Return to a saved review
 

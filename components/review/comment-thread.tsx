@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { useComments } from "@/hooks/use-comments";
-import { label, type Thread } from "@/lib/comments/model";
+import { authorInitial, authorName, label, type Thread } from "@/lib/comments/model";
 import { Composer } from "./comment-editor";
 export function ThreadView({ thread, previous = false }: { thread: Thread; previous?: boolean }) {
   const c = useComments(),
@@ -36,7 +36,7 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
         <MessageSquare />
         <span className="thread-location">
           {label(thread.anchor)}
-          {thread.resolved ? " · Resolved" : ""}
+          {thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}
         </span>
         <span className="thread-summary-text">
           {expanded
@@ -65,8 +65,10 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
             {thread.messages.map((m, i) => (
               <div className={`thread-message ${i > 0 ? "is-reply" : ""}`} key={m.id}>
                 <div className="message-meta">
-                  {i > 0 ? <CornerDownRight /> : <span className="comment-avatar">Y</span>}
-                  <strong>You</strong>
+                  {i > 0 && <CornerDownRight />}
+                  <span className="comment-avatar">{authorInitial(m.author)}</span>
+                  <strong>{authorName(m.author)}</strong>
+                  {m.author?.kind === "agent" && <span className="agent-badge">Agent</span>}
                   <time
                     dateTime={new Date(m.created).toISOString()}
                     title={new Date(m.created).toLocaleString()}
@@ -75,9 +77,9 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                    {m.edited ? " · edited" : ""}
+                    {m.edited ? ` · edited by ${authorName(m.editedBy || m.author)}` : ""}
                   </time>
-                  {!m.deleted && (
+                  {!m.deleted && m.author?.kind !== "agent" && (
                     <div className="message-actions">
                       <button
                         className="icon-button"

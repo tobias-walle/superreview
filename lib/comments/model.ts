@@ -7,6 +7,7 @@ export type Point = {
   text: string;
 };
 export type Anchor = {
+  kind?: "line" | "file";
   snapshotId?: string;
   path: string;
   fingerprint: string;
@@ -15,15 +16,26 @@ export type Anchor = {
   end: Point;
   excerpt: string;
 };
+export type Author = {
+  id: string;
+  name: string;
+  kind: "human" | "agent";
+};
+export const LOCAL_HUMAN: Author = { id: "local-user", name: "You", kind: "human" };
 export type Message = {
   id: string;
   body: string;
   created: number;
+  author?: Author;
   edited?: number;
+  editedBy?: Author;
   deleted?: boolean;
+  deletedBy?: Author;
 };
 export type Thread = {
   resolved?: boolean;
+  resolvedAt?: number;
+  resolvedBy?: Author;
   id: string;
   anchor: Anchor;
   messages: Message[];
@@ -57,7 +69,14 @@ export function range(anchor: Anchor, end: Point): Anchor {
   };
 }
 export function label(a: Anchor) {
+  if (a.kind === "file") return "File comment";
   return `${a.side === "old" ? "Old" : "New"} · L${a.start.line}${comparePoints(a.start, a.end) ? "–" + a.end.line : ""}`;
+}
+export function authorName(author?: Author) {
+  return author?.name || "Legacy author unknown";
+}
+export function authorInitial(author?: Author) {
+  return author?.name.trim().slice(0, 1).toUpperCase() || "?";
 }
 export function currentFile(a: Anchor, data: ReviewData, meta: FileMeta[]) {
   return data.files.findIndex(
@@ -65,6 +84,7 @@ export function currentFile(a: Anchor, data: ReviewData, meta: FileMeta[]) {
   );
 }
 export function contains(a: Anchor, path: string, hunk: number, line: DiffLine, side: Side) {
+  if (a.kind === "file") return false;
   const p = point(line, hunk, side);
   return (
     a.path === path &&
@@ -77,6 +97,7 @@ export function validAnchor(a: unknown): a is Anchor {
   const v = a as Anchor;
   return (
     !!v &&
+    (v.kind === undefined || v.kind === "line" || v.kind === "file") &&
     typeof v.path === "string" &&
     typeof v.fingerprint === "string" &&
     ["old", "new"].includes(v.side) &&

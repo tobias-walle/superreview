@@ -425,6 +425,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
           n.delete(file);
           return n;
         });
+        if (a.kind === "file") {
+          virtual.scrollToIndex(starts[file], { align: "start" });
+          return;
+        }
         setPendingComment(a);
       },
       scrollToFile(index) {

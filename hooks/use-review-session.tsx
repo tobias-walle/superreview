@@ -4,6 +4,8 @@ import type { Command, ReviewClient, Session } from "../lib/review/types";
 import type { Draft } from "../lib/comments/model";
 import { uid } from "../lib/comments/model";
 
+const EXTERNAL_UPDATE_INTERVAL_MS = 2000;
+
 function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState("");
@@ -34,6 +36,26 @@ function useSession() {
       throw e;
     });
   };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!client.current || !current.current) return;
+      const sync = queue.current.then(async () => {
+        const loaded = await client.current!.load();
+        const old = current.current!;
+        if (loaded.state.sequence <= old.state.sequence) return;
+        const showingCurrentSnapshot = old.snapshot.id === old.state.snapshotId;
+        const updated = {
+          ...old,
+          state: loaded.state,
+          snapshot: showingCurrentSnapshot ? loaded.snapshot : old.snapshot,
+        };
+        current.current = updated;
+        setSession(updated);
+      });
+      queue.current = sync.catch(() => {});
+    }, EXTERNAL_UPDATE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
   function execute(command: Command) {
     const id = uid();
     return enqueue(async () => {

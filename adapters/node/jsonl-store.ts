@@ -2,8 +2,27 @@ import { mkdir, readFile, writeFile, rename, open, rm, readdir } from "node:fs/p
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import type { Command, Event, ReviewIdentity, ReviewState, Snapshot } from "../../lib/review/types";
-import type { Draft } from "../../lib/comments/model";
+import { comparePoints, type Anchor, type Draft, type Point } from "../../lib/comments/model";
+import { renderHunk } from "../../lib/diff/render";
 import { decide, emptyReview, evolve } from "../../lib/review/core";
+
+function validatePoint(snapshot: Snapshot, anchor: Anchor, point: Point) {
+  const file = snapshot.data.files.find((entry) => entry.path === anchor.path);
+  const line = file?.hunks[point.hunk] && renderHunk(file.hunks[point.hunk]).unified[point.source];
+  const number = anchor.side === "old" ? line?.oldNo : line?.newNo;
+  if (!line || number !== point.line || line.text !== point.text)
+    throw new Error("Comment line is not in its snapshot");
+}
+function validateAnchor(snapshot: Snapshot, anchor: Anchor) {
+  const file = snapshot.data.files.find((entry) => entry.path === anchor.path);
+  if (!file) throw new Error("Comment file is not in its snapshot");
+  if (file.fingerprint !== anchor.fingerprint)
+    throw new Error("Comment file does not match its snapshot");
+  if (anchor.kind === "file") return;
+  validatePoint(snapshot, anchor, anchor.start);
+  validatePoint(snapshot, anchor, anchor.end);
+  if (comparePoints(anchor.start, anchor.end) > 0) throw new Error("Comment range is not ordered");
+}
 
 const safeId = (id: string) => {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid storage identifier");
@@ -124,8 +143,7 @@ export class JsonlStore {
       if (!snapshot) throw new Error("Capture a snapshot before commenting.");
       const anchor = command.thread.anchor;
       const original = await this.snapshot(anchor.snapshotId || snapshot.id);
-      if (!original.data.files.some((f) => f.path === anchor.path))
-        throw new Error("Comment file is not in its snapshot");
+      validateAnchor(original, anchor);
       const existing = this.state.threads.find((t) => t.id === command.thread.id);
       if (existing && JSON.stringify(existing.anchor) !== JSON.stringify(anchor))
         throw new Error("A thread anchor cannot be changed");

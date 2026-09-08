@@ -10,6 +10,8 @@ import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
 import { CommentContext, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
+import { agentRequest, exportThread } from "../../lib/review/markdown";
+import type { ReviewIdentity, Submission } from "../../lib/review/types";
 import type { Thread } from "../../lib/comments/model";
 
 test("document title identifies the project, branch, and comparison", () => {
@@ -124,6 +126,59 @@ test("a previous-diff thread remains readable and resolved state is a separate r
   assert.match(html, /Reopen thread/);
   assert.match(html, /Copy thread/);
   assert.match(html, /aria-expanded="true"/);
+  assert.match(html, /Legacy author unknown/);
+});
+test("agent attribution is visible in threads and Markdown exports", () => {
+  const agentThread: Thread = {
+    id: "agent-thread",
+    created: 1,
+    anchor: {
+      snapshotId: "snap",
+      path: "src/auth.ts",
+      fingerprint: "f",
+      side: "new",
+      start: { line: 2, hunk: 0, source: 1, text: "value" },
+      end: { line: 2, hunk: 0, source: 1, text: "value" },
+      excerpt: "2: value",
+    },
+    messages: [
+      {
+        id: "agent-message",
+        body: "I ran the test.",
+        created: 1,
+        author: { id: "agent", name: "Build agent", kind: "agent" },
+      },
+    ],
+  };
+  const comments = {
+    active: agentThread.id,
+    editor: null,
+    drafts: [],
+    setActive() {},
+    setEditor() {},
+    begin() {},
+    resolve() {},
+  } as unknown as Comments;
+  const html = renderToStaticMarkup(
+    <CommentContext.Provider value={comments}>
+      <ThreadView thread={agentThread} />
+    </CommentContext.Provider>,
+  );
+  assert.match(html, /Build agent/);
+  assert.match(html, />Agent</);
+  assert.doesNotMatch(html, /Edit comment/);
+  assert.match(exportThread(agentThread), /Comment by Build agent · Agent/);
+});
+test("copied agent requests identify the review, round, worktree, and permission", () => {
+  const identity = {
+    id: "review-1",
+    binding: { worktree: "/repo/worktree" },
+  } as ReviewIdentity;
+  const submission = { number: 3 } as Submission;
+  assert.match(agentRequest(identity, submission, "address"), /review `review-1`/);
+  assert.match(agentRequest(identity, submission, "address"), /Reply to each thread/);
+  assert.match(agentRequest(identity, submission, "summarize"), /Do not change code/);
+  assert.match(agentRequest(identity, submission, "summarize"), /submission 3/);
 });
 test("copy is an independent action, with an accessible descriptive label", () => {
   const html = renderToStaticMarkup(<CopyButton text="# Submission" />);

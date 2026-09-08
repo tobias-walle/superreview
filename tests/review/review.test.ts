@@ -18,6 +18,7 @@ import { JsonlStore, lockRepository } from "../../adapters/node/jsonl-store";
 import { capture, git, resolveComparison } from "../../adapters/node/git";
 import { startServer } from "../../adapters/node/server";
 import { parseArgs } from "../../cli/args";
+import { commentAnchor, threadOutput } from "../../cli/review-commands";
 import type { Snapshot, ReviewIdentity } from "../../lib/review/types";
 import type { Thread } from "../../lib/comments/model";
 
@@ -292,8 +293,14 @@ test("HTTP lifecycle persists comment, reply, submission, history and rejects cr
     try {
       const session: any = await (await fetch(url + "/api/session")).json();
       const t = structuredClone(thread);
-      t.anchor.snapshotId = snap.id;
-      t.anchor.fingerprint = snap.data.files[0].fingerprint!;
+      t.anchor = commentAnchor({
+        snapshot: snap,
+        path: "auth.ts",
+        side: "new",
+        line: 1,
+        endLine: 0,
+        fileComment: false,
+      });
       const saved = await post("/api/commands", {
         sequence: session.state.sequence,
         id: "http-comment",
@@ -334,12 +341,58 @@ test("HTTP lifecycle persists comment, reply, submission, history and rejects cr
       await new Promise<void>((r) => server.close(() => r()));
     }
   }));
-test("CLI parser handles comparison/path split and rejects unknown flags", () => {
+test("CLI parser handles review creation and agent feedback commands", () => {
   assert.deepEqual(parseArgs(["main...feature", "--", "space name.ts"]).paths, ["space name.ts"]);
   assert.equal(parseArgs(["--cached"]).cached, true);
+  assert.equal(parseArgs(["create", "main...HEAD"]).command, "create");
   assert.equal(parseArgs(["export", "abc", "--submission", "2"]).submission, 2);
+  assert.partialDeepStrictEqual(
+    parseArgs([
+      "comment",
+      "abc",
+      "--snapshot",
+      "snap",
+      "--path",
+      "auth.ts",
+      "--side",
+      "old",
+      "--line",
+      "4",
+      "--end-line",
+      "6",
+      "--body",
+      "Check this",
+    ]),
+    {
+      command: "comment",
+      id: "abc",
+      snapshot: "snap",
+      path: "auth.ts",
+      side: "old",
+      line: 4,
+      endLine: 6,
+      body: "Check this",
+    },
+  );
+  const reply = parseArgs(["reply", "abc", "thread-1", "--body-file", "-"]);
+  assert.equal(reply.threadId, "thread-1");
+  assert.equal(reply.bodyFile, "-");
+  assert.throws(() => parseArgs(["reply", "abc"]), /thread ID/);
   assert.throws(() => parseArgs(["--surprise"]), /Unknown/);
   assert.throws(() => parseArgs(["--port", "wrong"]), /Invalid/);
+});
+
+test("thread output identifies agent messages changed in each submission", () => {
+  let state = emptyReview(identity);
+  const agentThread = structuredClone(thread);
+  agentThread.messages[0].author = { id: "agent-test", name: "Test agent", kind: "agent" };
+  state = evolve(state, decide(state, { type: "thread", thread: agentThread }, snapshot, "t", 1));
+  state = evolve(state, decide(state, { type: "submit", summary: "" }, snapshot, "s", 2));
+  const output = threadOutput(state);
+  assert.equal(output.threads[0].messages[0].author?.kind, "agent");
+  assert.deepEqual(output.threads[0].submissionChanges, [
+    { submission: 1, messageIds: ["m1"], resolutionChanged: false },
+  ]);
 });
 
 test("unchanged branch diff evidence survives an empty commit", async () =>
@@ -422,6 +475,46 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
       packageMetadata.version,
     );
     await writeFile(join(root, "auth.ts"), "cli change\n");
+    const created = JSON.parse(
+      execFileSync(process.execPath, [binary, "create", "--name", "Headless review", "--json"], {
+        cwd: root,
+        encoding: "utf8",
+      }),
+    );
+    assert.equal(created.title, "Headless review");
+    assert.ok(created.reviewId);
+    assert.ok(created.snapshotId);
+    const headlessThreads = JSON.parse(
+      execFileSync(process.execPath, [binary, "threads", created.reviewId, "--json"], {
+        cwd: root,
+        encoding: "utf8",
+      }),
+    );
+    const headlessComment = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [
+          binary,
+          "comment",
+          created.reviewId,
+          "--snapshot",
+          created.snapshotId,
+          "--path",
+          "auth.ts",
+          "--side",
+          "new",
+          "--line",
+          "1",
+          "--body",
+          "Headless comment",
+          "--expected-sequence",
+          String(headlessThreads.sequence),
+          "--json",
+        ],
+        { cwd: root, encoding: "utf8" },
+      ),
+    );
+    assert.equal(headlessComment.sequence, headlessThreads.sequence + 1);
     async function launch(args: string[]) {
       const child = spawn(process.execPath, [binary, ...args, "--no-open", "--json"], {
         cwd: root,
@@ -472,8 +565,65 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
       assert.equal((await fetch(first.url + script)).status, 200);
       const session: any = await (await fetch(first.url + "/api/session")).json();
       assert.ok(session.snapshot.data.files.some((f: any) => f.path === "auth.ts"));
+      const comment = JSON.parse(
+        execFileSync(
+          process.execPath,
+          [
+            binary,
+            "comment",
+            first.reviewId,
+            "--snapshot",
+            session.snapshot.id,
+            "--path",
+            "auth.ts",
+            "--side",
+            "new",
+            "--line",
+            "1",
+            "--body",
+            "Check this result",
+            "--author",
+            "Test agent",
+            "--expected-sequence",
+            String(session.state.sequence),
+            "--request-id",
+            "cli-agent-comment",
+            "--json",
+          ],
+          { cwd: root, encoding: "utf8" },
+        ),
+      );
+      const replyArgs = [
+        binary,
+        "reply",
+        first.reviewId,
+        comment.threadId,
+        "--body",
+        "Implemented and tested",
+        "--expected-sequence",
+        String(comment.sequence),
+        "--request-id",
+        "cli-agent-reply",
+        "--json",
+      ];
+      const reply = JSON.parse(
+        execFileSync(process.execPath, replyArgs, { cwd: root, encoding: "utf8" }),
+      );
+      const retry = JSON.parse(
+        execFileSync(process.execPath, replyArgs, { cwd: root, encoding: "utf8" }),
+      );
+      assert.equal(retry.sequence, reply.sequence);
+      const conversations = JSON.parse(
+        execFileSync(process.execPath, [binary, "threads", first.reviewId, "--json"], {
+          cwd: root,
+          encoding: "utf8",
+        }),
+      );
+      assert.equal(conversations.threads[0].messages[0].author.kind, "agent");
+      assert.equal(conversations.threads[0].messages[0].author.name, "Test agent");
+      assert.equal(conversations.threads[0].messages.length, 2);
       const submitted = await post(first.url, "/api/commands", {
-        sequence: session.state.sequence,
+        sequence: reply.sequence,
         id: "cli-submit",
         command: { type: "submit", summary: "CLI end-to-end round" },
       });

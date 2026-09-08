@@ -1,4 +1,4 @@
-import type { Thread } from "../comments/model";
+import { authorName, type Thread } from "../comments/model";
 import type { ReviewIdentity, Snapshot, Submission } from "./types";
 
 function code(text: string) {
@@ -8,16 +8,35 @@ function code(text: string) {
 }
 export function exportThread(thread: Thread): string {
   const a = thread.anchor;
+  const location =
+    a.kind === "file"
+      ? "file"
+      : `${a.side === "old" ? "old" : "new"} L${a.start.line}${a.end.line !== a.start.line ? `–${a.end.line}` : ""}`;
   return [
-    `### ${a.path.replace(/[\r\n]/g, " ")} · ${a.side === "old" ? "old" : "new"} L${a.start.line}${a.end.line !== a.start.line ? `–${a.end.line}` : ""}`,
-    `Snapshot: ${a.snapshotId || "legacy snapshot"}${thread.resolved ? " · Resolved" : ""}`,
-    code(a.excerpt),
-    ...thread.messages.map(
-      (m, i) =>
-        `${i ? "**Reply**" : "**Comment**"}${m.deleted ? " (deleted)" : ""}\n\n${m.deleted ? "_Deleted in this round._" : m.body}`,
-    ),
-  ].join("\n\n");
+    `### ${a.path.replace(/[\r\n]/g, " ")} · ${location}`,
+    `Snapshot: ${a.snapshotId || "legacy snapshot"}${thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}`,
+    a.excerpt ? code(a.excerpt) : "",
+    ...thread.messages.map((m, i) => {
+      const name = authorName(m.author).replace(/[\r\n]/g, " ");
+      const kind = m.author?.kind === "agent" ? " · Agent" : "";
+      return `${i ? "**Reply" : "**Comment"} by ${name}${kind}**${m.deleted ? " (deleted)" : ""}\n\n${m.deleted ? "_Deleted in this round._" : m.body}`;
+    }),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
+export function agentRequest(
+  identity: ReviewIdentity,
+  submission: Submission,
+  task: "address" | "summarize",
+) {
+  const target = `Superreview submission ${submission.number} in review \`${identity.id}\``;
+  const location = `Worktree: \`${identity.binding.worktree}\``;
+  if (task === "summarize")
+    return `Read and summarize ${target}.\n${location}\nDo not change code. Do not add replies. Do not resolve threads.`;
+  return `Address ${target}.\n${location}\nRead the submitted feedback and the current thread conversations. Change the code as needed. Run the relevant checks. Reply to each thread with the result. Leave all threads unresolved for the human reviewer.`;
+}
+
 export function exportSubmission(
   identity: ReviewIdentity,
   snapshot: Snapshot,

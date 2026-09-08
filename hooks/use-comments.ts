@@ -1,6 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { FileMeta, ReviewData } from "@/lib/diff/render";
-import { currentFile, uid, type Anchor, type Draft, type Thread } from "@/lib/comments/model";
+import {
+  currentFile,
+  LOCAL_HUMAN,
+  uid,
+  type Anchor,
+  type Draft,
+  type Thread,
+} from "@/lib/comments/model";
 import { useReviewSession } from "./use-review-session";
 
 const EMPTY_THREADS: Thread[] = [];
@@ -117,9 +124,14 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     const messages =
       d.messageId && existing
         ? t.messages.map((m) =>
-            m.id === d.messageId ? { ...m, body: d.body.trim(), edited: Date.now() } : m,
+            m.id === d.messageId
+              ? { ...m, body: d.body.trim(), edited: Date.now(), editedBy: LOCAL_HUMAN }
+              : m,
           )
-        : [...t.messages, { id: uid(), body: d.body.trim(), created: Date.now() }];
+        : [
+            ...t.messages,
+            { id: uid(), body: d.body.trim(), created: Date.now(), author: LOCAL_HUMAN },
+          ];
     saving.current.add(id);
     const saved = await write("thread", { ...t, messages }, t.id);
     saving.current.delete(id);
@@ -137,7 +149,9 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     if (!original) return;
     const next = {
       ...t,
-      messages: t.messages.map((m) => (m.id === messageId ? { ...m, body: "", deleted: true } : m)),
+      messages: t.messages.map((m) =>
+        m.id === messageId ? { ...m, body: "", deleted: true, deletedBy: LOCAL_HUMAN } : m,
+      ),
     };
     if (!(await write("thread", next, t.id))) return;
     setNotice("Comment deleted");
@@ -158,8 +172,9 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
   const byLocation = useMemo(() => {
     const map = new Map<string, Thread[]>();
     for (const t of threads.filter((t) => t.messages.some((m) => !m.deleted))) {
-      const a = t.anchor,
-        key = `${a.fingerprint}:${a.end.hunk}:${a.end.source}`;
+      const a = t.anchor;
+      if (a.kind === "file") continue;
+      const key = `${a.fingerprint}:${a.end.hunk}:${a.end.source}`;
       map.set(key, [...(map.get(key) || []), t]);
     }
     return map;
@@ -176,7 +191,19 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     meta,
     threads: threads.filter((t) => t.messages.some((m) => !m.deleted)),
     drafts,
-    resolve: (t: Thread) => write("thread", { ...t, resolved: !t.resolved }, t.id),
+    resolve: (t: Thread) => {
+      const resolved = !t.resolved;
+      return write(
+        "thread",
+        {
+          ...t,
+          resolved,
+          resolvedAt: resolved ? Date.now() : undefined,
+          resolvedBy: resolved ? LOCAL_HUMAN : undefined,
+        },
+        t.id,
+      );
+    },
     editor,
     setEditor,
     active,

@@ -16,6 +16,8 @@ A dense, calm workspace for reading code and giving precise feedback. The diff i
 - Mobile: default to unified; use drawers for files/comments and a bottom sheet for the editor. No page-wide horizontal overflow. Keep explicit desktop simulation with a clear return action.
 - Support single-line and range comments through Shift-click and tap-based range controls. Show side and line range before writing. Keep drafts when closing the editor.
 - Distinguish pending feedback, resolved threads, viewed files and historical snapshots. These are different states.
+- Show the author on each message. Give agent messages a visible Agent badge. A custom display name must not hide the badge.
+- Keep an agent's report separate from human resolution. An agent reply must not resolve a thread.
 - Submit freezes a feedback round. Copy is a separate action after submission and remains available in History. Never combine copy and submit.
 - Use existing accessible primitives, visible focus, named icon buttons and reduced-motion support. Keep primary actions reachable in small viewports.
 

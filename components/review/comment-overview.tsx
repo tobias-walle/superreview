@@ -7,7 +7,14 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { useComments } from "@/hooks/use-comments";
-import { currentFile, label, type Anchor, type Draft, type Thread } from "@/lib/comments/model";
+import {
+  authorName,
+  currentFile,
+  label,
+  type Anchor,
+  type Draft,
+  type Thread,
+} from "@/lib/comments/model";
 import { Composer } from "./comment-editor";
 import { ThreadView } from "./comment-thread";
 export function CommentOverview({
@@ -21,13 +28,15 @@ export function CommentOverview({
 }) {
   const c = useComments(),
     [query, setQuery] = useState(""),
-    [scope, setScope] = useState("all");
+    [scope, setScope] = useState("all"),
+    [authorScope, setAuthorScope] = useState("all");
   const root = useRef<HTMLDivElement>(null);
   const entries = useMemo(() => {
     const threads = c.threads.map((t) => ({
       id: t.id,
       anchor: t.anchor,
       body: t.messages.find((m) => !m.deleted)?.body || "Deleted comment",
+      author: t.messages.find((m) => !m.deleted)?.author,
       thread: t,
       draft: undefined as Draft | undefined,
     }));
@@ -37,6 +46,7 @@ export function CommentOverview({
         id: d.id,
         anchor: d.anchor,
         body: d.body || "Empty draft",
+        author: undefined,
         thread: undefined as Thread | undefined,
         draft: d,
       }));
@@ -45,6 +55,13 @@ export function CommentOverview({
       .filter(
         (t) =>
           (scope === "all" || t.anchor.path === c.data.files[selected]?.path) &&
+          (authorScope === "all" ||
+            !!t.draft ||
+            t.thread?.messages.some((message) =>
+              authorScope === "agent"
+                ? message.author?.kind === "agent"
+                : message.author?.kind !== "agent",
+            )) &&
           (!query ||
             [t.anchor.path, t.body, ...(t.thread?.messages.map((m) => m.body) || [])]
               .join("\n")
@@ -58,7 +75,7 @@ export function CommentOverview({
           a.anchor.start.line - b.anchor.start.line ||
           a.id.localeCompare(b.id),
       );
-  }, [c.threads, c.drafts, c.data, c.meta, selected, scope, query]);
+  }, [c.threads, c.drafts, c.data, c.meta, selected, scope, authorScope, query]);
   // TanStack Virtual exposes callbacks React Compiler cannot memoize safely.
   // oxlint-disable-next-line react/incompatible-library
   const virtual = useVirtualizer({
@@ -104,6 +121,13 @@ export function CommentOverview({
             <TabsTrigger value="current">Current file</TabsTrigger>
           </TabsList>
         </Tabs>
+        <Tabs value={authorScope} onValueChange={setAuthorScope}>
+          <TabsList aria-label="Comment author">
+            <TabsTrigger value="all">All authors</TabsTrigger>
+            <TabsTrigger value="human">Human</TabsTrigger>
+            <TabsTrigger value="agent">Agent</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       {orphan || orphanDraft ? (
         <div className="previous-detail">
@@ -131,11 +155,13 @@ export function CommentOverview({
             <div className="comments-empty">
               <MessageSquare />
               <h3>
-                {query || scope === "current" ? "No matching comments" : "Start a conversation"}
+                {query || scope === "current" || authorScope !== "all"
+                  ? "No matching comments"
+                  : "Start a conversation"}
               </h3>
               <p>
-                {query || scope === "current"
-                  ? "Try another search or show all files."
+                {query || scope === "current" || authorScope !== "all"
+                  ? "Try another search or change the filters."
                   : "Select a line number to comment. Shift-click another line to select a range."}
               </p>
             </div>
@@ -186,7 +212,10 @@ export function CommentOverview({
                       </div>
                       <p>{e.body.split(/\n\s*\n/)[0].replace(/[*`#_~]/g, "")}</p>
                       <div className="comment-card-bottom">
-                        <span>{e.draft ? "Continue writing" : "You"}</span>
+                        <span>
+                          {e.draft ? "Continue writing" : authorName(e.author)}
+                          {e.author?.kind === "agent" && <span className="agent-badge">Agent</span>}
+                        </span>
                         {e.thread && (
                           <span>
                             <MessageSquare />

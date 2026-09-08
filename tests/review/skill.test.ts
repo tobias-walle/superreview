@@ -15,6 +15,11 @@ test("packaged skill reads outside Git without creating files, and has matching 
     assert.equal(plain.status, 0, plain.stderr);
     assert.equal(plain.stderr, "");
     assert.equal(plain.stdout, await readFile("skill-data/review.md", "utf8"));
+    assert.match(plain.stdout, /superreview threads <id> --json/);
+    assert.match(plain.stdout, /submissionChanges: Array/);
+    assert.match(plain.stdout, /kind: "human" \| "agent"/);
+    assert.match(plain.stdout, /comment and reply --json/);
+    assert.match(plain.stdout, /\{"error":"message"\}/);
     const json = run("skill", "read", "--json");
     assert.equal(json.status, 0, json.stderr);
     assert.deepEqual(JSON.parse(json.stdout), { name: "superreview", content: plain.stdout });

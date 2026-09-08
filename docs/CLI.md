@@ -30,10 +30,14 @@ superreview main feature            # endpoint comparison
 superreview --cached                 # HEAD vs index
 superreview --cached main            # main vs index
 superreview -- src/app.ts            # literal repository-relative paths
-superreview --new --name "Auth pass" # another independent review
+superreview --new --name "Auth pass" # another independent review server
 superreview --review <id> main...HEAD # full branch comparison in an existing review
-superreview list
+superreview create main...HEAD --name "Auth pass" --json # create, capture, and exit
+superreview list --json
 superreview open <id>                # exact saved snapshot; Refresh explicitly recaptures
+superreview threads <id> --json      # current conversations and submission changes
+superreview reply <id> <thread-id> --body-file reply.md --json
+superreview comment <id> --snapshot <snapshot-id> --path src/app.ts --side new --line 42 --body-file comment.md --json
 superreview archive <id>
 superreview reopen <id>
 superreview export <id> --submission 1
@@ -45,7 +49,11 @@ Use `--json` for machine-readable output. Diagnostics go to stderr. Color follow
 
 ## Reviewing your agent's work
 
-Run `superreview`, read changes, and save line comments. Files become viewed after every chunk has been visible, or through the checkbox. Submit a review when a feedback round is ready. The success dialog offers **Copy as Markdown** to hand feedback to your agent. Continue editing, then refresh or run the CLI again. Unchanged file evidence stays viewed. **Since reviewed** shows only remaining changes and compares changed files against their reviewed content when the base is compatible.
+Run `superreview`, read changes, and save line comments. Files become viewed after every chunk has been visible, or through the checkbox. Submit a review when a feedback round is ready. The success dialog offers **Copy agent task**, **Copy read-only task**, and **Copy as Markdown**. The agent task contains the review ID, submission number, and worktree. The read-only task tells the agent not to edit or reply.
+
+An agent with the Superreview skill can read the frozen submission and current conversation directly. It can add replies after it changes the code. Agent messages have a visible **Agent** badge. A custom display name does not remove this badge. The human reviewer keeps control of resolution and submission.
+
+Continue editing, then refresh or run the CLI again. Unchanged file evidence stays viewed. **Since reviewed** shows only remaining changes and compares changed files against their reviewed content when the base is compatible.
 
 A changed comparison base triggers a conservative full review. A file reviewed only against HEAD is not proof that older commits on the branch were reviewed. Manual unviewing remains in force for that exact file version until you re-enable automatic tracking or mark it viewed.
 
@@ -53,9 +61,27 @@ A changed comparison base triggers a conservative full review. A file reviewed o
 
 Fetch and check out the branch using Git, then run `superreview main...HEAD`. Review, comment, and submit a local round. Copy the submission from its success dialog or **History** at any later time. After new commits arrive, run the same command to capture them and retain unchanged evidence. GitHub/GitLab authentication, fetching PRs, and publishing feedback are not implemented in this release.
 
+## Headless agent workflow
+
+`create` always creates a new review. It captures the requested comparison and exits without a browser or server:
+
+```sh
+superreview create main...HEAD --name "Auth review" --json
+```
+
+Use the returned review and snapshot IDs for later commands. `open <id>` starts the UI for the saved snapshot.
+
+`threads <id> --json` returns current threads, author data, pending and resolved state, and a `submissionChanges` list. Each change lists the message IDs that changed in that submission. Use `--submission <number>` to limit the output to threads from one submitted round. Unfinished drafts are reported as a count and are not feedback.
+
+`reply` and `comment` always create agent messages. Use `--author` to set the display name. Use `--request-id` with a stable value for safe retries. Use `--expected-sequence` with the sequence from `threads` to reject stale writes.
+
+A line comment must name an immutable snapshot, repository-relative path, side, and visible diff line. Add `--end-line` for a range. Use `--file-comment` for a file comment. Superreview checks the location against the snapshot and never moves it to current code.
+
+Comment and reply commands use the active review server when it is running. Otherwise, they take the repository writer lock and write directly. They never submit a round, resolve a thread, or mark a file viewed.
+
 ## Feedback rounds
 
-Saved comments, replies, edits, deletions, and resolution changes remain pending until submitted. A submission freezes all changed threads, including their conversation context, summary, original code excerpts, and snapshot IDs. Editing a submitted comment produces pending feedback for the next round; it never rewrites the previous round. Unfinished editor drafts are excluded and clearly called out before submission. Submitting does not mark files viewed or resolve threads.
+Saved comments, replies, edits, deletions, and resolution changes remain pending until submitted. New browser messages have a human author. CLI comments and replies have an agent author. Old messages without author data remain unchanged and appear as **Legacy author unknown**. A submission freezes all changed threads, including their conversation context, summary, original code excerpts, and snapshot IDs. Editing a submitted comment produces pending feedback for the next round; it never rewrites the previous round. Unfinished editor drafts are excluded and clearly called out before submission. Submitting does not mark files viewed or resolve threads.
 
 ## Local storage
 

@@ -9,6 +9,14 @@ import { version } from "./version";
 import { repository, capture, git, type Comparison } from "../adapters/node/git";
 import { JsonlStore, atomicJson, listReviews, lockRepository } from "../adapters/node/jsonl-store";
 import { startServer } from "../adapters/node/server";
+import {
+  agentAuthor,
+  commentAnchor,
+  commentBody,
+  executeReviewWrite,
+  replyCommand,
+  threadOutput,
+} from "./review-commands";
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -30,7 +38,7 @@ async function main() {
     options.color === "always" ||
     (options.color === "auto" && !!process.stdout.isTTY && !("NO_COLOR" in process.env));
   const paint = (text: string, color: number) => (colored ? `\x1b[${color}m${text}\x1b[0m` : text);
-  if (options.command === "list" || options.command === "export") {
+  if (["list", "export", "threads"].includes(options.command)) {
     const reviews = await listReviews(root);
     if (options.command === "list") {
       if (options.json)
@@ -41,6 +49,10 @@ async function main() {
               title: s.identity.title,
               archived: s.archived,
               submissions: s.submissions.length,
+              sequence: s.sequence,
+              snapshotId: s.snapshotId,
+              worktree: s.identity.binding.worktree,
+              branch: s.identity.binding.branch,
             })),
           ),
         );
@@ -58,12 +70,101 @@ async function main() {
     } else {
       const review = reviews.find((s) => s.identity.id === options.id);
       if (!review) throw new Error("Review not found");
-      const submission = options.submission
-        ? review.submissions.find((s) => s.number === options.submission)
-        : review.submissions.at(-1);
-      if (!submission) throw new Error("No matching submission");
-      process.stdout.write(options.json ? JSON.stringify(submission) + "\n" : submission.markdown);
+      if (options.command === "export") {
+        const submission = options.submission
+          ? review.submissions.find((s) => s.number === options.submission)
+          : review.submissions.at(-1);
+        if (!submission) throw new Error("No matching submission");
+        process.stdout.write(
+          options.json ? JSON.stringify(submission) + "\n" : submission.markdown,
+        );
+      } else {
+        const store = new JsonlStore(root, review.identity.id);
+        const drafts = await store.draftState();
+        const output = threadOutput(review, options.submission, drafts.drafts.length);
+        if (options.json) console.log(JSON.stringify(output));
+        else {
+          console.log(
+            `${review.identity.title}  ${review.identity.id}  sequence ${review.sequence}`,
+          );
+          if (drafts.drafts.length)
+            console.log(`${drafts.drafts.length} unfinished drafts are not submitted feedback.`);
+          for (const thread of output.threads) {
+            console.log(
+              `\n${thread.id}  ${thread.anchor.path}  ${thread.resolved ? "resolved" : "open"}`,
+            );
+            for (const message of thread.messages)
+              console.log(
+                `  ${message.author?.name || "Legacy author unknown"}${message.author?.kind === "agent" ? " [Agent]" : ""}: ${message.deleted ? "[deleted]" : message.body}`,
+              );
+          }
+        }
+      }
     }
+    return;
+  }
+  if (options.command === "reply" || options.command === "comment") {
+    if (options.requestId.length > 100) throw new Error("Request ID is too long");
+    if (options.refs.length || options.paths.length)
+      throw new Error(`${options.command} does not accept Git revisions or path arguments`);
+    const text = await commentBody(options.body, options.bodyFile);
+    const author = agentAuthor(options.author);
+    const result = await executeReviewWrite({
+      root,
+      reviewId: options.id,
+      expectedSequence: options.expectedSequence,
+      requestId: options.requestId || undefined,
+      command: async (context, requestId) => {
+        if (options.command === "reply") {
+          const thread = context.state.threads.find((entry) => entry.id === options.threadId);
+          if (!thread) throw new Error("Thread not found");
+          return replyCommand(thread, text, author, requestId);
+        }
+        if (!options.snapshot) throw new Error("Agent comments require --snapshot <id>");
+        if (!options.path)
+          throw new Error("Agent comments require --path <repository-relative-path>");
+        const snapshot = await context.snapshotById(options.snapshot);
+        const anchor = commentAnchor({
+          snapshot,
+          path: options.path,
+          side: options.side,
+          line: options.line,
+          endLine: options.endLine,
+          fileComment: options.fileComment,
+        });
+        const now = Date.now();
+        return {
+          type: "thread",
+          thread: {
+            id: requestId,
+            anchor,
+            created: now,
+            messages: [{ id: `${requestId}-message`, body: text, author, created: now }],
+          },
+        };
+      },
+    });
+    const changedThread =
+      options.command === "reply"
+        ? result.state.threads.find((entry) => entry.id === options.threadId)
+        : result.state.threads.find((entry) => entry.id === result.requestId);
+    if (!changedThread) throw new Error("The request ID was already used for another operation");
+    const output = {
+      reviewId: options.id,
+      threadId: changedThread?.id,
+      messageId:
+        options.command === "reply"
+          ? changedThread.messages.find((message) => message.id === result.requestId)?.id
+          : `${result.requestId}-message`,
+      sequence: result.state.sequence,
+      requestId: result.requestId,
+    };
+    if (!output.messageId) throw new Error("The request ID was already used for another operation");
+    console.log(
+      options.json
+        ? JSON.stringify(output)
+        : `${options.command === "reply" ? "Added agent reply" : "Added agent comment"} ${output.threadId}`,
+    );
     return;
   }
   const unlock = await lockRepository(root);
@@ -110,7 +211,7 @@ async function main() {
       return /^HEAD(?:[~^].*)?$/.test(target) || target === repo.branch ? "branch" : target;
     };
     const bindingTarget = targetOf(comparison);
-    if (!found && !options.fresh)
+    if (!found && !options.fresh && options.command !== "create")
       found = [...reviews]
         .sort((a, b) => b.identity.created - a.identity.created)
         .find(
@@ -162,6 +263,20 @@ async function main() {
         : comparison;
     if (options.command !== "open" || !store.state.snapshotId)
       await store.capture(await capture(repo.root, savedComparison, store));
+    if (options.command === "create") {
+      const snapshot = await store.snapshot(store.state.snapshotId);
+      console.log(
+        options.json
+          ? JSON.stringify({
+              reviewId: store.id,
+              title: store.state.identity.title,
+              snapshotId: snapshot.id,
+              files: snapshot.data.files.length,
+            })
+          : `Created ${store.state.identity.title}  ${store.id}\n${snapshot.data.files.length} changed files`,
+      );
+      return;
+    }
     const { server, url } = await startServer({
       store,
       root: repo.root,
@@ -171,6 +286,7 @@ async function main() {
       qaOrigin: process.env.SUPERREVIEW_QA_ORIGIN,
     });
     running = true;
+    await atomicJson(join(root, "writer.lock", "server.json"), { url, reviewId: store.id });
     const snapshot = await store.snapshot(store.state.snapshotId);
     if (options.json)
       console.log(

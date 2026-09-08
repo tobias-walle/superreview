@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useReviewSession } from "@/hooks/use-review-session";
 import { pendingThreads } from "@/lib/review/core";
+import { agentRequest } from "@/lib/review/markdown";
 import type { Submission } from "@/lib/review/types";
 import { Markdown } from "./markdown";
 import { CopyButton } from "./copy-button";
@@ -153,6 +154,14 @@ export function SubmissionControls() {
                 <span>{new Date(selected.created).toLocaleString()}</span>
               </div>
               <div className="next-actions">
+                <CopyButton
+                  text={agentRequest(session.state.identity, selected, "address")}
+                  label="Copy agent task"
+                />
+                <CopyButton
+                  text={agentRequest(session.state.identity, selected, "summarize")}
+                  label="Copy read-only task"
+                />
                 <CopyButton text={selected.markdown} />
                 <button className="control" onClick={() => setScreen("detail")}>
                   <FileClock />
@@ -197,9 +206,22 @@ export function SubmissionControls() {
                   <ArrowLeft />
                   History
                 </button>
+                <CopyButton
+                  text={agentRequest(session.state.identity, selected, "address")}
+                  label="Copy agent task"
+                />
+                <CopyButton
+                  text={agentRequest(session.state.identity, selected, "summarize")}
+                  label="Copy read-only task"
+                />
                 <CopyButton text={selected.markdown} />
               </div>
-              <div className="submission-document">
+              <div
+                className="submission-document"
+                role="region"
+                aria-label={`Submission ${selected.number} document`}
+                tabIndex={0}
+              >
                 <Markdown body={selected.markdown} />
               </div>
               <button
