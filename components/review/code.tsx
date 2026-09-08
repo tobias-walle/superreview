@@ -1,6 +1,33 @@
+import type { CSSProperties } from "react";
 import { Gutter, lineSelected } from "./comments";
 import { useComments } from "@/hooks/use-comments";
 import type { Part, DiffLine } from "@/lib/diff/render";
+import type { HunkHighlight, SyntaxToken } from "@/lib/syntax/highlight";
+
+// Shiki follows TextMate's font-style bit flags.
+const FONT_STYLE_ITALIC = 1;
+const FONT_STYLE_BOLD = 2;
+const FONT_STYLE_UNDERLINE = 4;
+const FONT_STYLE_STRIKETHROUGH = 8;
+
+type SyntaxProperties = CSSProperties & {
+  "--syntax-mocha": string;
+  "--syntax-latte": string;
+};
+
+function syntaxStyle(token: SyntaxToken): SyntaxProperties {
+  const decorations = [
+    token.fontStyle & FONT_STYLE_UNDERLINE ? "underline" : "",
+    token.fontStyle & FONT_STYLE_STRIKETHROUGH ? "line-through" : "",
+  ].filter(Boolean);
+  return {
+    "--syntax-mocha": token.mocha,
+    "--syntax-latte": token.latte,
+    fontStyle: token.fontStyle & FONT_STYLE_ITALIC ? "italic" : undefined,
+    fontWeight: token.fontStyle & FONT_STYLE_BOLD ? "bold" : undefined,
+    textDecoration: decorations.join(" ") || undefined,
+  };
+}
 export function FileIcon({ path }: { path: string }) {
   const ext = path.split(".").pop() || "";
   return (
@@ -17,27 +44,24 @@ export function FileIcon({ path }: { path: string }) {
     </span>
   );
 }
-function Highlight({ parts, words }: { parts: Part[]; words: boolean }) {
+export function Highlight({
+  parts,
+  words,
+  syntax = [],
+}: {
+  parts: Part[];
+  words: boolean;
+  syntax?: SyntaxToken[];
+}) {
   const text = parts.map((p) => p.text).join("");
-  if (text.length > 4000) return <>{text}</>;
-  const syntax: Array<{ start: number; end: number; kind: string }> = [];
-  const pattern =
-    /(\/\/.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:import|from|export|const|let|return|if|else|async|await|new|throw|type|interface|function|true|false|undefined|null|for|of)\b|\b\d+\b|\b[A-Za-z_$][\w$]*(?=\())/g;
-  for (const m of text.matchAll(pattern)) {
-    const t = m[0];
-    const kind = t.startsWith("//")
-      ? "comment"
-      : /^["'`]/.test(t)
-        ? "string"
-        : /^(import|from|export|const|let|return|if|else|async|await|new|throw|type|interface|function|true|false|undefined|null|for|of)$/.test(
-              t,
-            )
-          ? "keyword"
-          : /^\d+$/.test(t)
-            ? "number"
-            : "function";
-    syntax.push({ start: m.index!, end: m.index! + t.length, kind });
-  }
+  const syntaxRanges = syntax.reduce<Array<{ start: number; end: number; token: SyntaxToken }>>(
+    (ranges, token) => {
+      const start = ranges.at(-1)?.end || 0;
+      ranges.push({ start, end: start + token.text.length, token });
+      return ranges;
+    },
+    [],
+  );
   const offsets = parts.reduce(
     (values, part) => [...values, values.at(-1)! + part.text.length],
     [0],
@@ -49,15 +73,21 @@ function Highlight({ parts, words }: { parts: Part[]; words: boolean }) {
         const end = offsets[i + 1];
         const points = [
           start,
-          ...syntax.flatMap((t) => [t.start, t.end]).filter((x) => x > start && x < end),
+          ...syntaxRanges
+            .flatMap((range) => [range.start, range.end])
+            .filter((offset) => offset > start && offset < end),
           end,
         ].sort((a, b) => a - b);
         return (
           <span key={i} className={words && part.changed ? "word-change" : ""}>
             {points.slice(0, -1).map((x, j) => {
-              const token = syntax.find((t) => t.start <= x && t.end > x);
+              const range = syntaxRanges.find((token) => token.start <= x && token.end > x);
               return (
-                <span key={j} className={token ? `token-${token.kind}` : undefined}>
+                <span
+                  key={j}
+                  className={range ? "syntax-token" : undefined}
+                  style={range ? syntaxStyle(range.token) : undefined}
+                >
                   {text.slice(x, points[j + 1])}
                 </span>
               );
@@ -75,6 +105,7 @@ export function Cell({
   file,
   hunk,
   side,
+  highlight,
 }: {
   line?: DiffLine;
   unified?: boolean;
@@ -82,6 +113,7 @@ export function Cell({
   file: number;
   hunk: number;
   side: "old" | "new";
+  highlight?: HunkHighlight;
 }) {
   const c = useComments();
   const actualSide = unified ? (line?.kind === "del" ? "old" : "new") : side;
@@ -117,7 +149,15 @@ export function Cell({
         {line?.kind === "add" ? "+" : line?.kind === "del" ? "−" : " "}
       </span>
       {line && <Gutter line={line} side={actualSide} file={file} hunk={hunk} plus />}
-      <code className="source">{line && <Highlight parts={line.parts} words={words} />}</code>
+      <code className="source">
+        {line && (
+          <Highlight
+            parts={line.parts}
+            words={words}
+            syntax={highlight?.[actualSide].get(line.sourceIndex)}
+          />
+        )}
+      </code>
     </div>
   );
 }

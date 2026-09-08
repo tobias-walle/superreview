@@ -17,6 +17,7 @@ import { LineThreads } from "./comments";
 import type { Anchor } from "@/lib/comments/model";
 import { Cell, FileIcon } from "./code";
 import { useLineVisibility } from "@/hooks/use-line-visibility";
+import { useSyntaxHighlighting } from "@/hooks/use-syntax-highlighting";
 import type { BlockMeta, FileMeta, ReviewFile, RowPair } from "@/lib/diff/render";
 export type DiffHandle = {
   scrollToFile: (index: number) => void;
@@ -55,6 +56,7 @@ const CodeBlock = memo(function CodeBlock({
   rows,
   file,
   hunk,
+  reviewFile,
   mode,
   wrap,
   words,
@@ -62,10 +64,12 @@ const CodeBlock = memo(function CodeBlock({
   rows: RowPair[];
   file: number;
   hunk: number;
+  reviewFile: ReviewFile;
   mode: string;
   wrap: boolean;
   words: boolean;
 }) {
+  const highlight = useSyntaxHighlighting(reviewFile.path, reviewFile.hunks[hunk]);
   const max = Math.max(
     0,
     ...rows.map(([a, b]) => Math.max(a?.text.length || 0, b?.text.length || 0)),
@@ -95,9 +99,17 @@ const CodeBlock = memo(function CodeBlock({
                 file={file}
                 hunk={hunk}
                 side="old"
+                highlight={highlight}
               />
               {mode === "split" && (
-                <Cell line={r[1]} words={words} file={file} hunk={hunk} side="new" />
+                <Cell
+                  line={r[1]}
+                  words={words}
+                  file={file}
+                  hunk={hunk}
+                  side="new"
+                  highlight={highlight}
+                />
               )}
             </div>
             <LineThreads
@@ -607,6 +619,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       rows={getBlock(item.key)!}
                       file={item.file}
                       hunk={item.hunk!}
+                      reviewFile={files[item.file]}
                       mode={mode}
                       words={words}
                       wrap={wrap}

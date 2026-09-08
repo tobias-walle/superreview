@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { reviewDocumentTitle } from "../../client/document-title";
 import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
+import { Highlight } from "../../components/review/code";
 import { ThreadView } from "../../components/review/comment-thread";
 import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
@@ -13,6 +14,8 @@ import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkp
 import { agentRequest, exportThread } from "../../lib/review/markdown";
 import type { ReviewIdentity, Submission } from "../../lib/review/types";
 import type { Thread } from "../../lib/comments/model";
+import type { Hunk } from "../../lib/diff/render";
+import { highlightHunk, languageForPath } from "../../lib/syntax/highlight";
 
 test("document title identifies the project, branch, and comparison", () => {
   assert.equal(
@@ -27,6 +30,62 @@ test("document title identifies the project, branch, and comparison", () => {
     reviewDocumentTitle("superreview", "feature/title", ["main...HEAD"]),
     "superreview ⋅ feature/title ⋅ main...HEAD",
   );
+});
+
+test("syntax highlighting recognizes file types and preserves word highlights", async () => {
+  assert.equal(languageForPath("src/example.tsx"), "tsx");
+  assert.ok(languageForPath("scripts/release.py"));
+  assert.equal(languageForPath("Dockerfile"), "dockerfile");
+  assert.equal(languageForPath("assets/data.unknown-extension"), undefined);
+
+  const hunk: Hunk = {
+    header: "@@ -1,2 +1,2 @@",
+    oldStart: 1,
+    newStart: 1,
+    lines: [" const answer = 1;", "-const oldValue = answer;", "+const newValue = answer;"],
+  };
+  const highlighted = await highlightHunk("src/example.ts", hunk);
+  assert.ok(highlighted);
+  assert.equal(
+    highlighted.old
+      .get(0)
+      ?.map((token) => token.text)
+      .join(""),
+    "const answer = 1;",
+  );
+  assert.equal(
+    highlighted.old
+      .get(1)
+      ?.map((token) => token.text)
+      .join(""),
+    "const oldValue = answer;",
+  );
+  assert.equal(
+    highlighted.new
+      .get(2)
+      ?.map((token) => token.text)
+      .join(""),
+    "const newValue = answer;",
+  );
+  assert.equal(highlighted.old.has(2), false);
+  assert.equal(highlighted.new.has(1), false);
+
+  const html = renderToStaticMarkup(
+    <Highlight
+      parts={[
+        { text: "const ", changed: false },
+        { text: "answer", changed: true },
+      ]}
+      words
+      syntax={[
+        { text: "const", mocha: "#fff", latte: "#000", fontStyle: 0 },
+        { text: " answer", mocha: "#eee", latte: "#111", fontStyle: 0 },
+      ]}
+    />,
+  );
+  assert.match(html, /class="syntax-token"/);
+  assert.match(html, /class="word-change"/);
+  assert.equal(html.replace(/<[^>]+>/g, ""), "const answer");
 });
 
 test("sidebar resizing follows its edge and respects width bounds", () => {

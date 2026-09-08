@@ -703,24 +703,11 @@ button {
 .unified .line-no {
   width: 39px;
 }
-.token-keyword {
-  color: var(--mauve);
+.syntax-token {
+  color: var(--syntax-mocha);
 }
-.token-string {
-  color: var(--green);
-}
-.token-number {
-  color: var(--peach);
-}
-.token-comment {
-  color: var(--overlay);
-  font-style: italic;
-}
-.token-function {
-  color: var(--blue);
-}
-.token-type {
-  color: var(--yellow);
+:root[data-theme="latte"] .syntax-token {
+  color: var(--syntax-latte);
 }
 .word-change {
   border-radius: 3px;
