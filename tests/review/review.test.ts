@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { emptyReview, evolve, decide, pendingThreads } from "../../lib/review/core";
 import { JsonlStore, lockRepository } from "../../adapters/node/jsonl-store";
 import { capture, git, resolveComparison } from "../../adapters/node/git";
@@ -422,6 +422,7 @@ test("failed initial capture can be retried without restarting the server", asyn
 test("CLI parser handles review creation and agent feedback commands", () => {
   assert.deepEqual(parseArgs(["main...feature", "--", "space name.ts"]).paths, ["space name.ts"]);
   assert.equal(parseArgs(["--cached"]).cached, true);
+  assert.equal(parseArgs(["--verbose"]).verbose, true);
   assert.equal(parseArgs(["create", "main...HEAD"]).command, "create");
   assert.equal(parseArgs(["export", "abc", "--submission", "2"]).submission, 2);
   assert.partialDeepStrictEqual(
@@ -553,12 +554,16 @@ test("packaged CLI starts, serves assets, resumes a review, exports history and 
       packageMetadata.version,
     );
     await writeFile(join(root, "auth.ts"), "cli change\n");
-    const created = JSON.parse(
-      execFileSync(process.execPath, [binary, "create", "--name", "Headless review", "--json"], {
-        cwd: root,
-        encoding: "utf8",
-      }),
+    const createResult = spawnSync(
+      process.execPath,
+      [binary, "create", "--name", "Headless review", "--json", "--verbose"],
+      { cwd: root, encoding: "utf8" },
     );
+    assert.equal(createResult.status, 0, createResult.stderr);
+    assert.match(createResult.stderr, /\[superreview \+[\d.]+ms\] inspect repository started/);
+    assert.match(createResult.stderr, /capture: discover changed files finished in [\d.]+ms/);
+    assert.match(createResult.stderr, /capture \(full\) finished in [\d.]+ms: 1 files/);
+    const created = JSON.parse(createResult.stdout);
     assert.equal(created.title, "Headless review");
     assert.ok(created.reviewId);
     assert.ok(created.snapshotId);

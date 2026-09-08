@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { parsePatch } from "../../lib/diff/parse.mjs";
 import type { CaptureProgress, Evidence, FileVersion, Snapshot } from "../../lib/review/types";
 import type { JsonlStore } from "./jsonl-store";
+import { startTiming, type TimingLogger } from "./diagnostics";
 
 export type Comparison = { refs: string[]; cached: boolean; paths: string[] };
 const GIT_BUFFER_BYTES = 512 * 1024 * 1024;
@@ -296,12 +297,16 @@ export async function capture(
   store: JsonlStore,
   view: "full" | "since" = "full",
   onProgress?: (progress: CaptureProgress) => void,
+  onTiming?: TimingLogger,
 ): Promise<Snapshot> {
   onProgress?.({ phase: "discovering", completed: 0, total: 0 });
+  const finishResolution = startTiming(onTiming, "capture: resolve repository and comparison");
   const [repo, resolved] = await Promise.all([
     captureRepository(root),
     resolveCaptureComparison(root, comparison),
   ]);
+  finishResolution(`${resolved.label}; ${resolved.target}`);
+  const finishDiscovery = startTiming(onTiming, "capture: discover changed files");
   const args = [
     "diff",
     "--name-status",
@@ -338,7 +343,13 @@ export async function capture(
   for (const [path, status] of entries)
     if (status === "U") throw new Error(`Resolve the merge conflict in ${path} before reviewing.`);
   const paths = entries.map(([path]) => path);
+  finishDiscovery(`${paths.length} files`);
   onProgress?.({ phase: "capturing", completed: 0, total: paths.length });
+  const finishContent = startTiming(
+    onTiming,
+    "capture: read and store content",
+    `${paths.length} files`,
+  );
   const [beforeVersions, afterVersions] = await Promise.all([
     capturedVersions(root, resolved.base, paths, store),
     capturedVersions(root, resolved.target, paths, store),
@@ -385,8 +396,14 @@ export async function capture(
       changedSinceReview: !!checkpoint?.viewed && checkpoint.evidence?.key !== key,
     });
   }
+  finishContent(`${paths.length} files; ${pending.length} included`);
 
   onProgress?.({ phase: "diffing", completed: 0, total: pending.length });
+  const finishDiff = startTiming(
+    onTiming,
+    "capture: generate and parse diff",
+    `${pending.length} files`,
+  );
   const temp = await mkdtemp(join(tmpdir(), "superreview-diff-"));
   try {
     const beforeDirectory = join(temp, "before"),
@@ -436,7 +453,7 @@ export async function capture(
         changedSinceReview: item.changedSinceReview,
       };
     });
-    return {
+    const snapshot: Snapshot = {
       id: randomUUID(),
       comparison,
       created: Date.now(),
@@ -450,6 +467,8 @@ export async function capture(
       },
       evidence,
     };
+    finishDiff(`${files.length} files`);
+    return snapshot;
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

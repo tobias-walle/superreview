@@ -20,7 +20,7 @@ Superreview opens in your browser:
 3. Submit a feedback round and choose **Copy agent task** or **Copy as Markdown** to share it.
 4. After more edits, refresh and use **Since reviewed** to focus on remaining changes.
 
-Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your review stays saved.
+Keep the terminal running while reviewing. Press Ctrl+C when you’re done. Your review stays saved. If startup or capture is slow on a real repository, run with `--verbose` to print per-stage timings to stderr.
 
 ## Installation
 

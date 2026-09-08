@@ -9,6 +9,7 @@ import { version } from "./version";
 import { repository, capture, git, type Comparison } from "../adapters/node/git";
 import { JsonlStore, atomicJson, listReviews, lockRepository } from "../adapters/node/jsonl-store";
 import { startServer } from "../adapters/node/server";
+import { createTimingLogger, startTiming } from "../adapters/node/diagnostics";
 import {
   agentAuthor,
   commentAnchor,
@@ -32,14 +33,19 @@ async function main() {
     process.stdout.write(await readSkill(options.json));
     return;
   }
+  const onTiming = createTimingLogger(options.verbose);
+  const finishRepository = startTiming(onTiming, "inspect repository");
   const repo = repository(process.cwd()),
     root = join(repo.root, ".superreview");
+  finishRepository(`${repo.branch}; ${repo.root}`);
   const colored =
     options.color === "always" ||
     (options.color === "auto" && !!process.stdout.isTTY && !("NO_COLOR" in process.env));
   const paint = (text: string, color: number) => (colored ? `\x1b[${color}m${text}\x1b[0m` : text);
   if (["list", "export", "threads"].includes(options.command)) {
+    const finishReviews = startTiming(onTiming, "load reviews");
     const reviews = await listReviews(root);
+    finishReviews(`${reviews.length} reviews`);
     if (options.command === "list") {
       if (options.json)
         console.log(
@@ -109,6 +115,7 @@ async function main() {
       throw new Error(`${options.command} does not accept Git revisions or path arguments`);
     const text = await commentBody(options.body, options.bodyFile);
     const author = agentAuthor(options.author);
+    const finishWrite = startTiming(onTiming, `write ${options.command}`);
     const result = await executeReviewWrite({
       root,
       reviewId: options.id,
@@ -144,6 +151,7 @@ async function main() {
         };
       },
     });
+    finishWrite(`sequence ${result.state.sequence}`);
     const changedThread =
       options.command === "reply"
         ? result.state.threads.find((entry) => entry.id === options.threadId)
@@ -167,9 +175,12 @@ async function main() {
     );
     return;
   }
+  const finishLock = startTiming(onTiming, "acquire writer lock");
   const unlock = await lockRepository(root);
+  finishLock(root);
   let running = false;
   try {
+    const finishStorage = startTiming(onTiming, "initialize local storage");
     await mkdir(join(root, "cache"), { recursive: true });
     try {
       await readFile(join(root, "config.json"));
@@ -192,7 +203,10 @@ async function main() {
       await mkdir(dirname(excludePath), { recursive: true });
       await appendFile(excludePath, "\n/.superreview/\n");
     }
+    finishStorage();
+    const finishReviews = startTiming(onTiming, "load reviews");
     const reviews = await listReviews(root, true);
+    finishReviews(`${reviews.length} reviews`);
     let found = options.id ? reviews.find((s) => s.identity.id === options.id) : undefined;
     if (options.id && !found) throw new Error("Review not found");
     const comparison: Comparison = {
@@ -228,6 +242,7 @@ async function main() {
               )) === bindingTarget,
         );
     const store = new JsonlStore(root, found?.identity.id || randomUUID().slice(0, 8));
+    const finishReview = startTiming(onTiming, found ? "load review" : "create review", store.id);
     if (found) await store.load(true);
     else
       await store.create({
@@ -243,12 +258,15 @@ async function main() {
           target: bindingTarget,
         },
       });
+    finishReview(store.id);
     if (options.command === "archive" || options.command === "reopen") {
+      const finishArchive = startTiming(onTiming, `${options.command} review`, store.id);
       await store.execute(
         { type: "archive", archived: options.command === "archive" },
         store.state.sequence,
         randomUUID(),
       );
+      finishArchive(`sequence ${store.state.sequence}`);
       console.log(
         options.json
           ? JSON.stringify({ id: store.id, archived: store.state.archived })
@@ -262,7 +280,19 @@ async function main() {
           JSON.parse(store.state.identity.binding.comparison || comparisonKey)
         : comparison;
     if (options.command === "create") {
-      await store.capture(await capture(repo.root, savedComparison, store));
+      const finishCapture = startTiming(onTiming, "capture (full)");
+      const captured = await capture(
+        repo.root,
+        savedComparison,
+        store,
+        "full",
+        undefined,
+        onTiming,
+      );
+      const finishSave = startTiming(onTiming, "capture: save snapshot");
+      await store.capture(captured);
+      finishSave(`${captured.data.files.length} files`);
+      finishCapture(`${captured.data.files.length} files`);
       const snapshot = await store.snapshot(store.state.snapshotId);
       console.log(
         options.json
@@ -277,6 +307,7 @@ async function main() {
       return;
     }
     const initialCapture = options.command !== "open" || !store.state.snapshotId;
+    const finishServer = startTiming(onTiming, "start server");
     const { server, url, startCapture } = await startServer({
       store,
       root: repo.root,
@@ -285,7 +316,9 @@ async function main() {
       port: options.port,
       qaOrigin: process.env.SUPERREVIEW_QA_ORIGIN,
       initialCapture,
+      onTiming,
     });
+    finishServer(url);
     running = true;
     await atomicJson(join(root, "writer.lock", "server.json"), { url, reviewId: store.id });
     const snapshot = initialCapture ? undefined : await store.snapshot(store.state.snapshotId);
@@ -304,6 +337,7 @@ async function main() {
         `\n${paint("superreview", 35)}  ${repo.branch}\n${store.state.identity.title}  ${paint(store.id, 90)}\n${snapshot ? `${snapshot.data.files.length} changed files` : "Preparing changes…"} · ${store.state.submissions.length} submissions\n\n${paint(url, 36)}\n${paint("Ctrl+C to stop · review saved locally", 90)}\n`,
       );
     if (options.open) {
+      const finishBrowser = startTiming(onTiming, "open browser");
       const [program, args] =
         process.platform === "darwin"
           ? ["open", [url]]
@@ -316,6 +350,7 @@ async function main() {
       });
       child.on("error", () => {});
       child.unref();
+      finishBrowser(program as string);
     }
     const captureTask = initialCapture
       ? startCapture().catch((error) => {

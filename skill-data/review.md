@@ -162,7 +162,7 @@ superreview --cached --no-open --json        # staged changes
 superreview --no-open --json -- src/app.ts   # literal repository-relative path
 ```
 
-The output always includes `url`, `reviewId`, `title`, and `status`. A new capture reports `status: "capturing"`, then `/api/session` reports `status: "ready"` with the immutable snapshot. A saved snapshot opened with `superreview open` also includes `snapshotId` and `files` immediately. Give the reviewer the URL without waiting for capture. Default comparisons resume the latest active review for the branch and worktree target. Use `--new --name "Auth review"` only when the user requests a separate review. Use `--review <id> main...HEAD` to attach a new comparison to a specified review.
+The output always includes `url`, `reviewId`, `title`, and `status`. A new capture reports `status: "capturing"`, then `/api/session` reports `status: "ready"` with the immutable snapshot. A saved snapshot opened with `superreview open` also includes `snapshotId` and `files` immediately. Give the reviewer the URL without waiting for capture. Default comparisons resume the latest active review for the branch and worktree target. Use `--new --name "Auth review"` only when the user requests a separate review. Use `--review <id> main...HEAD` to attach a new comparison to a specified review. When diagnosing a slow real repository, add `--verbose`; timing diagnostics go to stderr and leave JSON stdout unchanged.
 
 Only one writer can run in a worktree. Agent comment and reply commands use the running server when it owns that review. Stop your own server with SIGINT before you start a different review. Never remove a live lock or stop an unrelated process.
 

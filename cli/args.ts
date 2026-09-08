@@ -11,6 +11,7 @@ export function parseArgs(input: string[]) {
     port: 0,
     open: true,
     json: false,
+    verbose: false,
     color: "auto",
     command: "serve",
     id: "",
@@ -98,6 +99,7 @@ export function parseArgs(input: string[]) {
     } else if (arg === "--submission") options.submission = positiveInteger(++i, arg);
     else if (arg === "--no-open") options.open = false;
     else if (arg === "--json") options.json = true;
+    else if (arg === "--verbose") options.verbose = true;
     else if (arg.startsWith("--color=")) {
       options.color = arg.slice(8);
       if (!["auto", "always", "never"].includes(options.color))
@@ -145,7 +147,7 @@ Comment options:
   --body <text>  --body-file <path|->
 
 General options:
-  --new  --name <title>  --no-open  --port <number>  --json
+  --new  --name <title>  --no-open  --port <number>  --json  --verbose
   --color=auto|always|never  --submission <number>
 
 Reviews are saved in .superreview in this worktree. No code or index changes.

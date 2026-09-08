@@ -19,7 +19,7 @@ pnpm link:global
 
 The link follows the checkout. Run `pnpm build` after source changes.
 
-The CLI opens a browser and binds to a random port on 127.0.0.1. The browser shell opens before Git capture finishes and shows capture progress for large comparisons. Keep the terminal running. Ctrl+C stops the server after any in-flight immutable capture finishes; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port.
+The CLI opens a browser and binds to a random port on 127.0.0.1. The browser shell opens before Git capture finishes and shows capture progress for large comparisons. Keep the terminal running. Ctrl+C stops the server after any in-flight immutable capture finishes; your review remains saved. Use `--no-open` to print the URL without opening a browser, or `--port 4317` for a fixed port. Use `--verbose` to log timestamped CLI, storage, server, and Git capture timings to stderr when diagnosing slow repositories.
 
 ```sh
 superreview                         # HEAD vs working tree; staged + unstaged + untracked
@@ -28,6 +28,7 @@ superreview main..feature           # endpoint comparison
 superreview main...feature          # merge-base comparison
 superreview main feature            # endpoint comparison
 superreview --cached                 # HEAD vs index
+superreview --verbose                # log startup and capture timings to stderr
 superreview --cached main            # main vs index
 superreview -- src/app.ts            # literal repository-relative paths
 superreview --new --name "Auth pass" # another independent review server
@@ -45,7 +46,7 @@ superreview export <id> --submission 1
 
 Review IDs are stable. Working-tree and HEAD comparisons on the same branch/worktree resume its latest active review. Explicit comparisons against another branch have their own binding. Use `superreview --review <id> main...HEAD` to attach a different comparison to a chosen review. `open` restores the captured diff even after the source branch changes or disappears. Archive keeps history and can be reversed. Linked worktrees keep their own `.superreview` directory.
 
-Use `--json` for machine-readable output. Serve output always includes `url`, `reviewId`, `title`, and `status`. Fresh captures initially report `status: "capturing"`; `/api/session` changes to `status: "ready"` when the immutable snapshot is available. `superreview open` can report the saved `snapshotId` and file count immediately. Diagnostics go to stderr. Color follows the terminal and `NO_COLOR`; override it with `--color=always` or `--color=never`.
+Use `--json` for machine-readable output. Serve output always includes `url`, `reviewId`, `title`, and `status`. Fresh captures initially report `status: "capturing"`; `/api/session` changes to `status: "ready"` when the immutable snapshot is available. `superreview open` can report the saved `snapshotId` and file count immediately. Diagnostics, including opt-in `--verbose` timing lines, go to stderr and never alter JSON stdout. Color follows the terminal and `NO_COLOR`; override it with `--color=always` or `--color=never`.
 
 ## Reviewing your agent's work
 

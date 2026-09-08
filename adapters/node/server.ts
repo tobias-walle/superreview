@@ -5,6 +5,7 @@ import type { CaptureProgress, Session } from "../../lib/review/types";
 import type { JsonlStore } from "./jsonl-store";
 import { capture, type Comparison } from "./git";
 import { commandSchema, draftsSchema } from "../../lib/review/validation";
+import { startTiming, type TimingLogger } from "./diagnostics";
 
 const initialProgress: CaptureProgress = { phase: "discovering", completed: 0, total: 0 };
 
@@ -27,6 +28,7 @@ export async function startServer(options: {
   port: number;
   qaOrigin?: string;
   initialCapture?: boolean;
+  onTiming?: TimingLogger;
 }) {
   const { store, root, comparison, web } = options;
   let writeQueue: Promise<unknown> = Promise.resolve();
@@ -60,11 +62,19 @@ export async function startServer(options: {
     if (activeCapture) return activeCapture;
     captureState = { status: "capturing", progress: initialProgress };
     const task = enqueue(async () => {
+      const finishCapture = startTiming(options.onTiming, `capture (${view})`);
       try {
         if (store.state.archived) throw new Error("Archived reviews are read-only");
-        const snapshot = await capture(root, comparison, store, view, (progress) => {
-          captureState = { status: "capturing", progress };
-        });
+        const snapshot = await capture(
+          root,
+          comparison,
+          store,
+          view,
+          (progress) => {
+            captureState = { status: "capturing", progress };
+          },
+          options.onTiming,
+        );
         captureState = {
           status: "capturing",
           progress: {
@@ -73,11 +83,15 @@ export async function startServer(options: {
             total: snapshot.data.files.length,
           },
         };
+        const finishSave = startTiming(options.onTiming, "capture: save snapshot");
         await store.capture(snapshot);
+        finishSave(`${snapshot.data.files.length} files`);
         captureState = { status: "ready" };
+        finishCapture(`${snapshot.data.files.length} files`);
         return session();
       } catch (error: any) {
         captureState = { status: "error", error: error.message };
+        finishCapture(`failed: ${error.message}`);
         throw error;
       }
     });
