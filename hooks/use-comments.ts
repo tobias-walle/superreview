@@ -12,6 +12,24 @@ import { useReviewSession } from "./use-review-session";
 
 const EMPTY_THREADS: Thread[] = [];
 const EMPTY_DRAFTS: Draft[] = [];
+const SHOW_RESOLVED_STORAGE_KEY = "superreview-show-resolved-comments";
+
+export function filterVisibleThreads(
+  threads: Thread[],
+  showResolved: boolean,
+  draftThreadIds: ReadonlySet<string> = new Set(),
+) {
+  return threads.filter(
+    (thread) => !thread.resolved || showResolved || draftThreadIds.has(thread.id),
+  );
+}
+
+function initialShowResolved() {
+  return (
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem(SHOW_RESOLVED_STORAGE_KEY) === "true"
+  );
+}
 
 export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
   const runtime = useReviewSession();
@@ -24,6 +42,10 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [undo, setUndo] = useState<null | (() => void)>(null);
+  const [showResolved, setShowResolved] = useState(initialShowResolved);
+  useEffect(() => {
+    localStorage.setItem(SHOW_RESOLVED_STORAGE_KEY, String(showResolved));
+  }, [showResolved]);
   useEffect(() => {
     if (!notice || undo) return;
     const timer = setTimeout(() => setNotice(""), 5000);
@@ -169,41 +191,121 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
       setNotice("Comment restored");
     });
   }
+  const presentThreads = useMemo(
+    () => threads.filter((thread) => thread.messages.some((message) => !message.deleted)),
+    [threads],
+  );
+  const draftThreadIds = useMemo(
+    () => new Set(drafts.flatMap((draft) => (draft.threadId ? [draft.threadId] : []))),
+    [drafts],
+  );
+  const visibleThreads = useMemo(
+    () => filterVisibleThreads(presentThreads, showResolved, draftThreadIds),
+    [presentThreads, showResolved, draftThreadIds],
+  );
+  const openThreads = useMemo(
+    () => presentThreads.filter((thread) => !thread.resolved),
+    [presentThreads],
+  );
+  function updateShowResolved(show: boolean) {
+    setShowResolved(show);
+    if (
+      !show &&
+      active &&
+      presentThreads.some((thread) => thread.id === active && thread.resolved) &&
+      !draftThreadIds.has(active)
+    )
+      setActive(null);
+  }
   const byLocation = useMemo(() => {
     const map = new Map<string, Thread[]>();
-    for (const t of threads.filter((t) => t.messages.some((m) => !m.deleted))) {
+    for (const t of visibleThreads) {
       const a = t.anchor;
       if (a.kind === "file") continue;
       const key = `${a.fingerprint}:${a.end.hunk}:${a.end.source}`;
       map.set(key, [...(map.get(key) || []), t]);
     }
     return map;
-  }, [threads]);
+  }, [visibleThreads]);
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const t of threads.filter((t) => t.messages.some((m) => !m.deleted)))
+    for (const t of visibleThreads)
       if (currentFile(t.anchor, data, meta) >= 0)
         map.set(t.anchor.path, (map.get(t.anchor.path) || 0) + 1);
     return map;
-  }, [threads, data, meta]);
+  }, [visibleThreads, data, meta]);
+  async function restoreResolution(originals: Thread[]) {
+    for (const original of originals) {
+      const current = latest(original.id) || original;
+      await write(
+        "thread",
+        {
+          ...current,
+          resolved: original.resolved,
+          resolvedAt: original.resolvedAt,
+          resolvedBy: original.resolvedBy,
+        },
+        original.id,
+      );
+    }
+    setUndo(null);
+    setNotice(
+      originals.length === 1 ? "Comment reopened" : `${originals.length} comments reopened`,
+    );
+  }
+  async function resolveThread(thread: Thread) {
+    const current = latest(thread.id) || thread;
+    const resolved = !current.resolved;
+    const saved = await write(
+      "thread",
+      {
+        ...current,
+        resolved,
+        resolvedAt: resolved ? Date.now() : undefined,
+        resolvedBy: resolved ? LOCAL_HUMAN : undefined,
+      },
+      current.id,
+    );
+    if (!saved) return false;
+    setNotice(resolved ? "Comment resolved" : "Comment reopened");
+    if (resolved) {
+      if (!showResolved && !draftThreadIds.has(current.id)) setActive(null);
+      setUndo(() => () => void restoreResolution([current]));
+    } else setUndo(null);
+    return true;
+  }
+  async function resolveAll() {
+    const originals = state.current.threads.filter(
+      (thread) => !thread.resolved && thread.messages.some((message) => !message.deleted),
+    );
+    const resolvedAt = Date.now();
+    const completed: Thread[] = [];
+    for (const thread of originals) {
+      const saved = await write(
+        "thread",
+        { ...thread, resolved: true, resolvedAt, resolvedBy: LOCAL_HUMAN },
+        thread.id,
+      );
+      if (!saved) return false;
+      completed.push(thread);
+    }
+    if (!showResolved) setActive(null);
+    setNotice(`${completed.length} comments resolved`);
+    setUndo(() => () => void restoreResolution(completed));
+    return true;
+  }
   return {
     data,
     meta,
-    threads: threads.filter((t) => t.messages.some((m) => !m.deleted)),
+    threads: presentThreads,
+    visibleThreads,
+    openCount: openThreads.length,
+    resolvedCount: presentThreads.length - openThreads.length,
+    showResolved,
+    setShowResolved: updateShowResolved,
     drafts,
-    resolve: (t: Thread) => {
-      const resolved = !t.resolved;
-      return write(
-        "thread",
-        {
-          ...t,
-          resolved,
-          resolvedAt: resolved ? Date.now() : undefined,
-          resolvedBy: resolved ? LOCAL_HUMAN : undefined,
-        },
-        t.id,
-      );
-    },
+    resolve: resolveThread,
+    resolveAll,
     editor,
     setEditor,
     active,

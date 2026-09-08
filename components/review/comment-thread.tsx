@@ -4,6 +4,7 @@ import { CopyButton } from "./copy-button";
 import { exportThread } from "@/lib/review/markdown";
 import {
   MessageSquare,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   CornerDownRight,
@@ -21,7 +22,7 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
   const messages = thread.messages.filter((m) => !m.deleted);
   return (
     <section
-      className={`comment-thread ${expanded ? "thread-active" : ""}`}
+      className={`comment-thread ${thread.resolved ? "thread-resolved" : ""} ${expanded ? "thread-active" : ""}`}
       data-thread={thread.id}
     >
       <button
@@ -33,7 +34,7 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
         }}
       >
         {expanded ? <ChevronDown /> : <ChevronRight />}
-        <MessageSquare />
+        {thread.resolved ? <CheckCircle2 aria-hidden="true" /> : <MessageSquare />}
         <span className="thread-location">
           {label(thread.anchor)}
           {thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}

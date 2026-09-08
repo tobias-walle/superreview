@@ -1315,8 +1315,24 @@ button {
   font-weight: 600;
   margin: 0;
 }
-.comments-heading .icon-button {
+.comments-heading > .icon-button {
   margin-left: auto;
+}
+.comments-open-count {
+  white-space: nowrap;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.resolve-all-control {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--mauve);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.resolve-all-control svg {
+  width: 14px;
+  height: 14px;
 }
 .comment-filters {
   padding: 0 12px 12px;
@@ -1354,6 +1370,28 @@ button {
 .comment-filters [data-slot="tabs-trigger"] {
   font-size: 12px;
   box-shadow: none;
+}
+.resolved-filter,
+.resolved-filter label {
+  display: flex;
+  align-items: center;
+}
+.resolved-filter {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.resolved-filter label {
+  gap: 8px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.resolved-filter [data-slot="checkbox"] {
+  width: 16px;
+  height: 16px;
 }
 .comment-list {
   flex: 1;
@@ -1393,6 +1431,12 @@ button {
   border-color: var(--mauve);
   background: color-mix(in srgb, var(--mauve) 6%, var(--background));
 }
+.comment-card.resolved {
+  background: color-mix(in srgb, var(--surface) 55%, var(--background));
+}
+.comment-card.resolved:not(.active) {
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+}
 .comment-card-top,
 .comment-card-bottom {
   display: flex;
@@ -1406,6 +1450,19 @@ button {
   color: var(--mauve);
   font: 12px var(--font-mono);
 }
+.comment-card-top > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.comment-card-top svg {
+  width: 13px;
+  height: 13px;
+  color: var(--green);
+  flex-shrink: 0;
+}
 .comment-card p {
   margin: 7px 0 8px;
   font-size: 13px;
@@ -1416,7 +1473,13 @@ button {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
+.comment-card-bottom {
+  flex-wrap: wrap;
+}
 .comment-card-bottom > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex-wrap: wrap;
   display: inline-flex;
   gap: 5px;
   align-items: center;
@@ -1585,6 +1648,15 @@ button {
 }
 .comment-thread.thread-active {
   border-color: color-mix(in srgb, var(--mauve) 55%, var(--border));
+}
+.comment-thread.thread-resolved:not(.thread-active) {
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+}
+.comment-thread.thread-resolved .thread-summary {
+  background: color-mix(in srgb, var(--surface) 55%, var(--background));
+}
+.comment-thread.thread-resolved .thread-summary > svg:nth-of-type(2) {
+  color: var(--green);
 }
 .thread-summary {
   display: flex;
@@ -1933,9 +2005,12 @@ button {
   border-radius: 7px;
   padding: 12px 14px;
   font-size: 14px;
-  white-space: nowrap;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  overflow-wrap: anywhere;
 }
 .comment-toast button {
+  flex-shrink: 0;
   color: var(--mauve);
 }
 .comment-toast svg {
@@ -2214,6 +2289,17 @@ button {
   color: var(--subtext);
   font-size: 14px;
   line-height: 1.5;
+}
+.resolve-all-dialog {
+  width: min(480px, calc(100vw - 24px)) !important;
+  max-width: 480px !important;
+}
+.resolve-all-dialog [data-slot="dialog-header"] {
+  text-align: left;
+}
+.resolve-all-dialog .primary-control svg {
+  width: 14px;
+  height: 14px;
 }
 .submission-meta {
   display: flex;

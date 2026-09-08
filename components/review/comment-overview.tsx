@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { SubmissionControls } from "./submissions";
 
-import { MessageSquare, X, Search, PanelRightClose } from "lucide-react";
+import { CheckCircle2, CheckCheck, MessageSquare, PanelRightClose, Search, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { useComments } from "@/hooks/use-comments";
@@ -29,10 +37,13 @@ export function CommentOverview({
   const c = useComments(),
     [query, setQuery] = useState(""),
     [scope, setScope] = useState("all"),
-    [authorScope, setAuthorScope] = useState("all");
+    [authorScope, setAuthorScope] = useState("all"),
+    [confirmResolveAll, setConfirmResolveAll] = useState(false),
+    [resolvingAll, setResolvingAll] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const showResolvedId = useId();
   const entries = useMemo(() => {
-    const threads = c.threads.map((t) => ({
+    const threads = c.visibleThreads.map((t) => ({
       id: t.id,
       anchor: t.anchor,
       body: t.messages.find((m) => !m.deleted)?.body || "Deleted comment",
@@ -75,7 +86,7 @@ export function CommentOverview({
           a.anchor.start.line - b.anchor.start.line ||
           a.id.localeCompare(b.id),
       );
-  }, [c.threads, c.drafts, c.data, c.meta, selected, scope, authorScope, query]);
+  }, [c.visibleThreads, c.threads, c.drafts, c.data, c.meta, selected, scope, authorScope, query]);
   // TanStack Virtual exposes callbacks React Compiler cannot memoize safely.
   // oxlint-disable-next-line react/incompatible-library
   const virtual = useVirtualizer({
@@ -89,9 +100,12 @@ export function CommentOverview({
     const i = entries.findIndex((e) => e.id === c.active || e.id === c.editor);
     if (i >= 0) virtual.scrollToIndex(i, { align: "auto" });
   }, [c.active, c.editor, entries, virtual]);
-  const orphan = c.threads.find(
+  const orphan = c.visibleThreads.find(
     (t) => t.id === c.active && currentFile(t.anchor, c.data, c.meta) < 0,
   );
+  const openFileCount = new Set(
+    c.threads.filter((thread) => !thread.resolved).map((thread) => thread.anchor.path),
+  ).size;
   const orphanDraft = c.drafts.find(
     (d) => d.id === c.editor && currentFile(d.anchor, c.data, c.meta) < 0 && !d.threadId,
   );
@@ -100,7 +114,7 @@ export function CommentOverview({
       <div className="comments-heading">
         <MessageSquare />
         <h2>Comments</h2>
-        <span className="count">{c.threads.length}</span>
+        <span className="comments-open-count">{c.openCount} open</span>
         <button className="icon-button" aria-label="Close comments overview" onClick={onClose}>
           <PanelRightClose />
         </button>
@@ -128,6 +142,24 @@ export function CommentOverview({
             <TabsTrigger value="agent">Agent</TabsTrigger>
           </TabsList>
         </Tabs>
+        <div className="resolved-filter">
+          <label htmlFor={showResolvedId}>
+            <Checkbox
+              id={showResolvedId}
+              checked={c.showResolved}
+              onCheckedChange={(checked) => c.setShowResolved(checked === true)}
+            />
+            Show resolved ({c.resolvedCount})
+          </label>
+          <button
+            className="control resolve-all-control"
+            disabled={!c.openCount || resolvingAll}
+            onClick={() => setConfirmResolveAll(true)}
+          >
+            <CheckCheck aria-hidden="true" />
+            Resolve all
+          </button>
+        </div>
       </div>
       {orphan || orphanDraft ? (
         <div className="previous-detail">
@@ -155,14 +187,23 @@ export function CommentOverview({
             <div className="comments-empty">
               <MessageSquare />
               <h3>
-                {query || scope === "current" || authorScope !== "all"
+                {query ||
+                scope === "current" ||
+                authorScope !== "all" ||
+                (!c.showResolved && c.resolvedCount)
                   ? "No matching comments"
                   : "Start a conversation"}
               </h3>
               <p>
-                {query || scope === "current" || authorScope !== "all"
-                  ? "Try another search or change the filters."
-                  : "Select a line number to comment. Shift-click another line to select a range."}
+                {!c.showResolved &&
+                c.resolvedCount &&
+                !query &&
+                scope === "all" &&
+                authorScope === "all"
+                  ? "Turn on Show resolved to view completed conversations."
+                  : query || scope === "current" || authorScope !== "all"
+                    ? "Try another search or change the filters."
+                    : "Select a line number to comment. Shift-click another line to select a range."}
               </p>
             </div>
           ) : (
@@ -193,7 +234,7 @@ export function CommentOverview({
                       </div>
                     )}
                     <button
-                      className={`comment-card ${c.active === e.id || c.editor === e.id ? "active" : ""}`}
+                      className={`comment-card ${e.thread?.resolved ? "resolved" : ""} ${c.active === e.id || c.editor === e.id ? "active" : ""}`}
                       onClick={() => {
                         if (e.thread) c.open(e.thread);
                         else {
@@ -205,6 +246,7 @@ export function CommentOverview({
                     >
                       <div className="comment-card-top">
                         <span>
+                          {e.thread?.resolved && <CheckCircle2 aria-hidden="true" />}
                           {label(e.anchor)}
                           {e.thread?.resolved ? " · Resolved" : ""}
                         </span>
@@ -238,6 +280,48 @@ export function CommentOverview({
         </div>
       )}
       <SubmissionControls />
+      <Dialog
+        open={confirmResolveAll}
+        onOpenChange={(open) => !resolvingAll && setConfirmResolveAll(open)}
+      >
+        <DialogContent className="review-dialog resolve-all-dialog" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Resolve all open comments?</DialogTitle>
+            <DialogDescription>
+              This will resolve {c.openCount} {c.openCount === 1 ? "thread" : "threads"} across{" "}
+              {openFileCount} {openFileCount === 1 ? "file" : "files"}. Draft comments are not
+              affected.
+            </DialogDescription>
+          </DialogHeader>
+          {c.error && (
+            <p className="review-warning" role="alert">
+              {c.error}
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button
+              className="control"
+              disabled={resolvingAll}
+              onClick={() => setConfirmResolveAll(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="control primary-control"
+              disabled={resolvingAll || !c.openCount}
+              onClick={async () => {
+                setResolvingAll(true);
+                const resolved = await c.resolveAll();
+                setResolvingAll(false);
+                if (resolved) setConfirmResolveAll(false);
+              }}
+            >
+              <CheckCheck />
+              {resolvingAll ? "Resolving…" : `Resolve all ${c.openCount}`}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

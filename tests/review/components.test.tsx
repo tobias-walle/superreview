@@ -8,7 +8,7 @@ import { CopyButton } from "../../components/review/copy-button";
 import { ThreadView } from "../../components/review/comment-thread";
 import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
-import { CommentContext, type Comments } from "../../hooks/use-comments";
+import { CommentContext, filterVisibleThreads, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
 import { agentRequest, exportThread } from "../../lib/review/markdown";
 import type { ReviewIdentity, Submission } from "../../lib/review/types";
@@ -127,6 +127,21 @@ test("a previous-diff thread remains readable and resolved state is a separate r
   assert.match(html, /Copy thread/);
   assert.match(html, /aria-expanded="true"/);
   assert.match(html, /Legacy author unknown/);
+});
+test("resolved comments are hidden unless requested or they contain a draft", () => {
+  const open = { id: "open", resolved: false } as Thread;
+  const resolved = { id: "resolved", resolved: true } as Thread;
+  const resolvedDraft = { id: "resolved-draft", resolved: true } as Thread;
+  const threads = [open, resolved, resolvedDraft];
+
+  assert.deepEqual(
+    filterVisibleThreads(threads, false, new Set([resolvedDraft.id])).map((thread) => thread.id),
+    [open.id, resolvedDraft.id],
+  );
+  assert.deepEqual(
+    filterVisibleThreads(threads, true).map((thread) => thread.id),
+    threads.map((thread) => thread.id),
+  );
 });
 test("agent attribution is visible in threads and Markdown exports", () => {
   const agentThread: Thread = {

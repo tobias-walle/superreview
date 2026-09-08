@@ -144,7 +144,7 @@ function Workspace() {
                 fileCount={data.files.length}
                 snapshotLabel={session.snapshot.label}
                 branch={data.branch}
-                commentCount={comments.threads.length}
+                commentCount={comments.openCount}
                 commentsActive={commentsOpen && !commentsUseDrawer}
                 commentsExpanded={commentsUseDrawer ? commentDrawerOpen : commentsOpen}
                 onToggleComments={() =>
