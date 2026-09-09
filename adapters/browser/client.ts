@@ -28,4 +28,8 @@ export const httpClient: ReviewClient = {
   },
   refresh: (view) => request("refresh", { view }),
   snapshot: (id) => request(`snapshots/${encodeURIComponent(id)}`),
+  content: async (object) => {
+    const result = await request<{ content: string }>(`objects/${encodeURIComponent(object)}`);
+    return result.content;
+  },
 };

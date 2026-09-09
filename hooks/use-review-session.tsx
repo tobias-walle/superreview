@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { httpClient } from "../adapters/browser/client";
 import type {
   CaptureProgress,
@@ -147,6 +155,7 @@ function useSession() {
       /* Keep the current review and show the connection error. */
     }
   }
+  const readContent = useCallback((object: string) => client.current!.content(object), []);
   async function openSnapshot(id: string) {
     setBusy(true);
     try {
@@ -170,6 +179,7 @@ function useSession() {
     saveDrafts,
     refresh,
     openSnapshot,
+    readContent,
     reload,
     clearError: () => setError(""),
   };

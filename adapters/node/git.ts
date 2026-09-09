@@ -446,6 +446,7 @@ export async function capture(
       onProgress?.({ phase: "diffing", completed: index + 1, total: pending.length });
       return {
         ...file,
+        sourceObjects: { old: item.shownBefore.object, new: item.after.object },
         ...(item.before.mode !== item.after.mode
           ? { changeSummary: `Mode ${item.before.mode} → ${item.after.mode}` }
           : {}),

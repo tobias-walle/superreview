@@ -112,4 +112,5 @@ export interface ReviewClient {
   saveDrafts(drafts: Draft[], revision: number): Promise<number>;
   refresh(view: "full" | "since"): Promise<Session>;
   snapshot(id: string): Promise<Snapshot>;
+  content(object: string): Promise<string>;
 }

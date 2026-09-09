@@ -19,6 +19,7 @@ import { Cell, FileIcon } from "./code";
 import { useLineVisibility } from "@/hooks/use-line-visibility";
 import { useSyntaxHighlighting } from "@/hooks/use-syntax-highlighting";
 import type { BlockMeta, FileMeta, ReviewFile, RowPair } from "@/lib/diff/render";
+import type { Evidence } from "@/lib/review/types";
 export type DiffHandle = {
   scrollToFile: (index: number) => void;
   scrollToAnchor: (anchor: Anchor) => void;
@@ -37,6 +38,8 @@ const MOBILE_FILE_HEADER_GAP_PX = 14;
 type Props = {
   preparationMs: number;
   files: ReviewFile[];
+  evidence: Record<string, Evidence>;
+  readContent: (object: string) => Promise<string>;
   meta: FileMeta[];
   error: string;
   mode: string;
@@ -60,6 +63,8 @@ const CodeBlock = memo(function CodeBlock({
   mode,
   wrap,
   words,
+  evidence,
+  readContent,
 }: {
   rows: RowPair[];
   file: number;
@@ -68,8 +73,20 @@ const CodeBlock = memo(function CodeBlock({
   mode: string;
   wrap: boolean;
   words: boolean;
+  evidence: Evidence;
+  readContent: Props["readContent"];
 }) {
-  const highlight = useSyntaxHighlighting(reviewFile.path, reviewFile.hunks[hunk]);
+  const sourceObjects = reviewFile.sourceObjects || {
+    old: evidence.before.object,
+    new: evidence.after.object,
+  };
+  const highlight = useSyntaxHighlighting(
+    reviewFile.path,
+    reviewFile.hunks[hunk],
+    sourceObjects.old,
+    sourceObjects.new,
+    readContent,
+  );
   const max = Math.max(
     0,
     ...rows.map(([a, b]) => Math.max(a?.text.length || 0, b?.text.length || 0)),
@@ -260,6 +277,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     request,
     version,
     error,
+    evidence,
+    readContent,
   } = props;
   const root = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(new Set<number>());
@@ -623,6 +642,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       mode={mode}
                       words={words}
                       wrap={wrap}
+                      evidence={evidence[file.path]}
+                      readContent={readContent}
                     />
                   ) : (
                     <div

@@ -169,6 +169,8 @@ function Workspace() {
                 preparationMs={model.preparationMs}
                 ref={diffRef}
                 files={data.files}
+                evidence={session.snapshot.evidence}
+                readContent={runtime.readContent}
                 meta={model.meta}
                 error={model.error}
                 mode={mode}

@@ -122,6 +122,12 @@ export async function startServer(options: {
           if (req.method === "GET" && url.pathname === "/api/session") result = await session();
           else if (req.method === "GET" && url.pathname.startsWith("/api/snapshots/"))
             result = await store.snapshot(url.pathname.slice("/api/snapshots/".length));
+          else if (req.method === "GET" && url.pathname.startsWith("/api/objects/"))
+            result = {
+              content: (
+                await store.readObject(url.pathname.slice("/api/objects/".length))
+              ).toString("utf8"),
+            };
           else if (req.method === "POST") {
             if (
               req.headers["x-superreview"] !== "1" ||

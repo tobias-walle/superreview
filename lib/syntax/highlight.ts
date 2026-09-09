@@ -6,7 +6,7 @@ import mochaTheme from "shiki/themes/catppuccin-mocha.mjs";
 import type { Hunk } from "@/lib/diff/render";
 
 const MAX_HIGHLIGHTED_LINE_LENGTH = 4_000;
-const MAX_HIGHLIGHTED_HUNK_LENGTH = 500_000;
+const MAX_HIGHLIGHTED_FILE_LENGTH = 500_000;
 const MOCHA_THEME = "catppuccin-mocha";
 const LATTE_THEME = "catppuccin-latte";
 
@@ -59,7 +59,17 @@ export type HunkHighlight = {
 type Language = keyof typeof bundledLanguages;
 let highlighterPromise: Promise<HighlighterCore> | undefined;
 const languagePromises = new Map<Language, Promise<void>>();
-const hunkCache = new WeakMap<Hunk, Map<Language, Promise<HunkHighlight | undefined>>>();
+const hunkCache = new WeakMap<Hunk, Map<string, Promise<HunkHighlight | undefined>>>();
+const fileCache = new Map<
+  string,
+  Promise<{ old: SyntaxToken[][]; new: SyntaxToken[][] } | undefined>
+>();
+
+export type HighlightSources = {
+  old: string;
+  new: string;
+  key: string;
+};
 
 function isLanguage(value: string): value is Language {
   return value in bundledLanguages;
@@ -112,63 +122,96 @@ function sideSource(hunk: Hunk, side: "old" | "new") {
   return { sourceIndexes, lines };
 }
 
-async function highlightSide(
-  highlighter: HighlighterCore,
-  hunk: Hunk,
-  side: "old" | "new",
-  language: Language,
-) {
-  const { sourceIndexes, lines } = sideSource(hunk, side);
-  const highlighted = highlighter.codeToTokensWithThemes(lines.join("\n"), {
-    lang: language,
-    themes: { mocha: MOCHA_THEME, latte: LATTE_THEME },
-  });
-  return new Map(
-    sourceIndexes.map((sourceIndex, index) => [
-      sourceIndex,
-      (highlighted[index] || []).map((token) => ({
-        text: token.content,
-        mocha: token.variants.mocha.color || "inherit",
-        latte: token.variants.latte.color || "inherit",
-        fontStyle: token.variants.mocha.fontStyle || 0,
-      })),
-    ]),
+function syntaxTokens(highlighted: ReturnType<HighlighterCore["codeToTokensWithThemes"]>) {
+  return highlighted.map((line) =>
+    line.map((token) => ({
+      text: token.content,
+      mocha: token.variants.mocha.color || "inherit",
+      latte: token.variants.latte.color || "inherit",
+      fontStyle: token.variants.mocha.fontStyle || 0,
+    })),
   );
 }
 
-async function createHunkHighlight(hunk: Hunk, language: Language) {
-  const contentLength = hunk.lines.reduce((length, line) => length + line.length, 0);
+async function highlightFile(sources: HighlightSources, language: Language) {
+  const sourceLines = [sources.old.split("\n"), sources.new.split("\n")];
   if (
-    contentLength > MAX_HIGHLIGHTED_HUNK_LENGTH ||
-    hunk.lines.some((line) => line.length > MAX_HIGHLIGHTED_LINE_LENGTH)
+    sources.old.length > MAX_HIGHLIGHTED_FILE_LENGTH ||
+    sources.new.length > MAX_HIGHLIGHTED_FILE_LENGTH ||
+    sourceLines.some((lines) => lines.some((line) => line.length > MAX_HIGHLIGHTED_LINE_LENGTH))
   )
     return undefined;
 
   await loadLanguage(language);
   const highlighter = await getHighlighter();
-  const [old, next] = await Promise.all([
-    highlightSide(highlighter, hunk, "old", language),
-    highlightSide(highlighter, hunk, "new", language),
-  ]);
+  return {
+    old: syntaxTokens(
+      highlighter.codeToTokensWithThemes(sources.old, {
+        lang: language,
+        themes: { mocha: MOCHA_THEME, latte: LATTE_THEME },
+      }),
+    ),
+    new: syntaxTokens(
+      highlighter.codeToTokensWithThemes(sources.new, {
+        lang: language,
+        themes: { mocha: MOCHA_THEME, latte: LATTE_THEME },
+      }),
+    ),
+  };
+}
+
+function hunkHighlight(
+  hunk: Hunk,
+  highlighted: { old: SyntaxToken[][]; new: SyntaxToken[][] },
+): HunkHighlight {
+  const old = new Map<number, SyntaxToken[]>();
+  const next = new Map<number, SyntaxToken[]>();
+  let oldLine = hunk.oldStart;
+  let newLine = hunk.newStart;
+  let sourceIndex = 0;
+  for (const rawLine of hunk.lines) {
+    if (rawLine.startsWith("\\")) continue;
+    const kind = rawLine[0];
+    if (kind !== "+") old.set(sourceIndex, highlighted.old[oldLine++ - 1] || []);
+    if (kind !== "-") next.set(sourceIndex, highlighted.new[newLine++ - 1] || []);
+    sourceIndex++;
+  }
   return { old, new: next };
 }
 
-export function highlightHunk(path: string, hunk: Hunk) {
+function hunkSources(hunk: Hunk): HighlightSources {
+  return {
+    old: sideSource(hunk, "old").lines.join("\n"),
+    new: sideSource(hunk, "new").lines.join("\n"),
+    key: "hunk",
+  };
+}
+
+export function highlightHunk(path: string, hunk: Hunk, fullSources?: HighlightSources) {
   const language = languageForPath(path);
   if (!language) return Promise.resolve(undefined);
+  const sources = fullSources || hunkSources(hunk);
+  const cacheKey = `${language}:${sources.key}`;
 
-  let byLanguage = hunkCache.get(hunk);
-  if (!byLanguage) {
-    byLanguage = new Map();
-    hunkCache.set(hunk, byLanguage);
+  let bySource = hunkCache.get(hunk);
+  if (!bySource) {
+    bySource = new Map();
+    hunkCache.set(hunk, bySource);
   }
-  let pending = byLanguage.get(language);
+  let pending = bySource.get(cacheKey);
   if (!pending) {
-    pending = createHunkHighlight(hunk, language).catch((error) => {
-      console.warn(`Syntax highlighting failed for ${path}`, error);
-      return undefined;
-    });
-    byLanguage.set(language, pending);
+    let file = fullSources ? fileCache.get(cacheKey) : undefined;
+    if (!file) {
+      file = highlightFile(sources, language);
+      if (fullSources) fileCache.set(cacheKey, file);
+    }
+    pending = file
+      .then((highlighted) => (highlighted ? hunkHighlight(hunk, highlighted) : undefined))
+      .catch((error) => {
+        console.warn(`Syntax highlighting failed for ${path}`, error);
+        return undefined;
+      });
+    bySource.set(cacheKey, pending);
   }
   return pending;
 }

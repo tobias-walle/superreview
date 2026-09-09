@@ -236,6 +236,15 @@ test("viewed evidence survives ref-only changes, since-reviewed diffs use review
       changed.evidence["auth.ts"].before.object,
       first.evidence["auth.ts"].before.object,
     );
+    assert.equal(
+      changed.data.files[0].sourceObjects?.old,
+      first.evidence["auth.ts"].after.object,
+      "the displayed old source differs from the original comparison evidence",
+    );
+    assert.equal(
+      changed.data.files[0].sourceObjects?.new,
+      changed.evidence["auth.ts"].after.object,
+    );
     git(root, ["add", "auth.ts"]);
     git(root, ["commit", "-m", "new base"]);
     await writeFile(join(root, "auth.ts"), 'const token = "latest";\n');
@@ -363,6 +372,10 @@ test("HTTP lifecycle persists comment, reply, submission, history and rejects cr
       assert.equal(restore.state.submissions.length, 1);
       const history = await fetch(url + "/api/snapshots/" + snap.id);
       assert.equal(history.status, 200);
+      const afterObject = snap.evidence["auth.ts"].after.object!;
+      const content = await fetch(url + "/api/objects/" + afterObject);
+      assert.equal(content.status, 200);
+      assert.deepEqual(await content.json(), { content: "new\n" });
     } finally {
       await new Promise<void>((r) => server.close(() => r()));
     }

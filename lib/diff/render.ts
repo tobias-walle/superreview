@@ -15,6 +15,7 @@ export type Hunk = {
   lines: string[];
 };
 export type ReviewFile = {
+  sourceObjects?: { old: string | null; new: string | null };
   fingerprint?: string;
   changedSinceReview?: boolean;
   changeSummary?: string;

@@ -70,6 +70,25 @@ test("syntax highlighting recognizes file types and preserves word highlights", 
   assert.equal(highlighted.old.has(2), false);
   assert.equal(highlighted.new.has(1), false);
 
+  const statefulHunk: Hunk = {
+    header: "@@ -2 +2 @@",
+    oldStart: 2,
+    newStart: 2,
+    lines: [" from claim_linking import candidate"],
+  };
+  const isolated = await highlightHunk("example.py", statefulHunk);
+  const fromFullFile = await highlightHunk("example.py", statefulHunk, {
+    old: '"""\nfrom claim_linking import candidate\n"""\n',
+    new: '"""\nfrom claim_linking import candidate\n"""\n',
+    key: "python-string-object",
+  });
+  assert.ok(isolated && fromFullFile);
+  assert.notEqual(
+    isolated.old.get(0)?.[0]?.mocha,
+    fromFullFile.old.get(0)?.[0]?.mocha,
+    "full-file parser state treats the apparent import as string content",
+  );
+
   const html = renderToStaticMarkup(
     <Highlight
       parts={[
