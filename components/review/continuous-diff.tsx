@@ -11,14 +11,23 @@ import {
   useState,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, ChevronDown, ChevronRight, Copy, RotateCcw } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Plus, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LineThreads } from "./comments";
 import type { Anchor } from "@/lib/comments/model";
 import { Cell, FileIcon } from "./code";
 import { useLineVisibility } from "@/hooks/use-line-visibility";
 import { useSyntaxHighlighting } from "@/hooks/use-syntax-highlighting";
-import type { BlockMeta, FileMeta, ReviewFile, RowPair } from "@/lib/diff/render";
+import {
+  BLOCK_ROWS,
+  hiddenContextBefore,
+  renderHunk,
+  type BlockMeta,
+  type FileMeta,
+  type Hunk,
+  type ReviewFile,
+  type RowPair,
+} from "@/lib/diff/render";
 import type { Evidence } from "@/lib/review/types";
 export type DiffHandle = {
   scrollToFile: (index: number) => void;
@@ -26,13 +35,18 @@ export type DiffHandle = {
 };
 type Item = {
   key: string;
-  kind: "header" | "hunk" | "block" | "end" | "binary";
+  kind: "header" | "hunk" | "gap" | "block" | "context" | "end" | "binary";
   file: number;
   hunk?: number;
   block?: number;
   meta?: BlockMeta;
+  rows?: RowPair[];
+  displayHunk?: Hunk;
+  gapCount?: number;
+  gapState?: "loading" | "error";
 };
 const MOBILE_VIEWPORT_MAX_WIDTH_PX = 767;
+const HUNK_HEADER_HEIGHT_PX = 31;
 const DESKTOP_FILE_HEADER_GAP_PX = 18;
 const MOBILE_FILE_HEADER_GAP_PX = 14;
 type Props = {
@@ -65,6 +79,8 @@ const CodeBlock = memo(function CodeBlock({
   words,
   evidence,
   readContent,
+  displayHunk,
+  interactive = true,
 }: {
   rows: RowPair[];
   file: number;
@@ -75,6 +91,8 @@ const CodeBlock = memo(function CodeBlock({
   words: boolean;
   evidence: Evidence;
   readContent: Props["readContent"];
+  displayHunk?: Hunk;
+  interactive?: boolean;
 }) {
   const sourceObjects = reviewFile.sourceObjects || {
     old: evidence.before.object,
@@ -82,7 +100,7 @@ const CodeBlock = memo(function CodeBlock({
   };
   const highlight = useSyntaxHighlighting(
     reviewFile.path,
-    reviewFile.hunks[hunk],
+    displayHunk || reviewFile.hunks[hunk],
     sourceObjects.old,
     sourceObjects.new,
     readContent,
@@ -107,7 +125,11 @@ const CodeBlock = memo(function CodeBlock({
           <Fragment key={i}>
             <div
               className="code-row"
-              data-review-line={`${file}/${hunk}/${[...new Set(r.filter(Boolean).map((l) => l!.sourceIndex))].join(",")}`}
+              data-review-line={
+                interactive
+                  ? `${file}/${hunk}/${[...new Set(r.filter(Boolean).map((l) => l!.sourceIndex))].join(",")}`
+                  : undefined
+              }
             >
               <Cell
                 line={r[0]}
@@ -117,6 +139,7 @@ const CodeBlock = memo(function CodeBlock({
                 hunk={hunk}
                 side="old"
                 highlight={highlight}
+                interactive={interactive}
               />
               {mode === "split" && (
                 <Cell
@@ -126,14 +149,17 @@ const CodeBlock = memo(function CodeBlock({
                   hunk={hunk}
                   side="new"
                   highlight={highlight}
+                  interactive={interactive}
                 />
               )}
             </div>
-            <LineThreads
-              file={file}
-              hunk={hunk}
-              sources={[...new Set(r.filter(Boolean).map((l) => l!.sourceIndex))]}
-            />
+            {interactive && (
+              <LineThreads
+                file={file}
+                hunk={hunk}
+                sources={[...new Set(r.filter(Boolean).map((l) => l!.sourceIndex))]}
+              />
+            )}
           </Fragment>
         ))}
       </div>
@@ -285,6 +311,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const [width, setWidth] = useState(1000);
   const [pendingComment, setPendingComment] = useState<Anchor | null>(null);
   const [copied, setCopied] = useState(-1);
+  const [expandedGaps, setExpandedGaps] = useState(new Set<string>());
+  const [sourceContents, setSourceContents] = useState(new Map<string, string | Error>());
   const anchor = useRef<Item | undefined>(undefined);
   const previousLayout = useRef("");
   const navigationTarget = useRef<number | undefined>(undefined);
@@ -303,6 +331,37 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       setTimeout(() => setCopied(-1), 1200);
     } catch {}
   }, []);
+  const toggleGap = useCallback(
+    (file: number, hunk: number) => {
+      const key = `${file}:${hunk}`;
+      const reviewFile = files[file];
+      const fallback = evidence[reviewFile.path];
+      const object =
+        reviewFile.sourceObjects?.new ||
+        reviewFile.sourceObjects?.old ||
+        fallback.after.object ||
+        fallback.before.object;
+      const cached = object ? sourceContents.get(object) : undefined;
+      setExpandedGaps((current) => {
+        const next = new Set(current);
+        if (next.has(key) && !(cached instanceof Error)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      if (!object || typeof cached === "string") return;
+      void readContent(object)
+        .then((content) => {
+          setSourceContents((current) => new Map(current).set(object, content));
+        })
+        .catch((error) => {
+          setSourceContents((current) => new Map(current).set(object, error));
+        });
+    },
+    [evidence, files, readContent, sourceContents],
+  );
+  useEffect(() => {
+    setExpandedGaps(new Set());
+  }, [files]);
   useEffect(() => {
     if (!root.current) return;
     const observer = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
@@ -318,6 +377,67 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       if (collapsed.has(fi)) return;
       if (files[fi].binary) items.push({ key: `${fi}:binary`, kind: "binary", file: fi });
       file.hunks.forEach((h, hi) => {
+        const hidden = hiddenContextBefore(files[fi].hunks, hi);
+        if (hidden) {
+          const gapKey = `${fi}:${hi}`;
+          const expanded = expandedGaps.has(gapKey);
+          const fallback = evidence[files[fi].path];
+          const useNew = !!(files[fi].sourceObjects?.new || fallback.after.object);
+          const object = useNew
+            ? files[fi].sourceObjects?.new || fallback.after.object
+            : files[fi].sourceObjects?.old || fallback.before.object;
+          const content = object ? sourceContents.get(object) : undefined;
+          items.push({
+            key: `${gapKey}:gap`,
+            kind: "gap",
+            file: fi,
+            hunk: hi,
+            gapCount: hidden.count,
+            gapState: expanded
+              ? content instanceof Error
+                ? "error"
+                : typeof content === "string"
+                  ? undefined
+                  : "loading"
+              : undefined,
+          });
+          if (expanded && typeof content === "string") {
+            const sourceLines = content.split("\n");
+            const start = useNew ? hidden.newStart : hidden.oldStart;
+            const displayHunk: Hunk = {
+              header: "",
+              oldStart: hidden.oldStart,
+              newStart: hidden.newStart,
+              lines: sourceLines
+                .slice(start - 1, start - 1 + hidden.count)
+                .map((line) => ` ${line}`),
+            };
+            const rendered = renderHunk(displayHunk);
+            const rows =
+              mode === "split"
+                ? rendered.split
+                : rendered.unified.map((line): RowPair => [line, undefined]);
+            for (let offset = 0; offset < rows.length; offset += BLOCK_ROWS) {
+              const blockRows = rows.slice(offset, offset + BLOCK_ROWS);
+              items.push({
+                key: `${gapKey}:context:${mode}:${offset / BLOCK_ROWS}`,
+                kind: "context",
+                file: fi,
+                hunk: hi,
+                block: offset / BLOCK_ROWS,
+                rows: blockRows,
+                displayHunk,
+                meta: {
+                  count: blockRows.length,
+                  lengths: blockRows.map(([old, next]) =>
+                    Math.max(old?.text.length || 0, next?.text.length || 0),
+                  ),
+                  sources: [],
+                },
+              });
+            }
+          }
+        }
         items.push({
           key: `${fi}:${hi}:hunk`,
           kind: "hunk",
@@ -339,7 +459,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       items.push({ key: `${fi}:end`, kind: "end", file: fi });
     });
     return { items, starts };
-  }, [meta, files, mode, collapsed]);
+  }, [meta, files, mode, collapsed, expandedGaps, evidence, sourceContents]);
   const estimate = useCallback(
     (i: number) => {
       const item = items[i];
@@ -347,7 +467,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         return (
           64 + (mode === "split" && !collapsed.has(item.file) && !files[item.file].binary ? 29 : 0)
         );
-      if (item.kind === "hunk") return 31;
+      if (item.kind === "hunk" || item.kind === "gap") return HUNK_HEADER_HEIGHT_PX;
       if (item.kind === "end") return 32;
       if (item.kind === "binary") return 96;
       const narrow = width < 700;
@@ -616,6 +736,22 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       </div>
                     )}
                   </div>
+                ) : item.kind === "gap" ? (
+                  <button
+                    className="hunk-gap stream-hunk"
+                    type="button"
+                    aria-expanded={expandedGaps.has(`${item.file}:${item.hunk}`)}
+                    onClick={() => toggleGap(item.file, item.hunk!)}
+                  >
+                    <Plus />
+                    <span>
+                      {item.gapState === "loading"
+                        ? "Loading hidden lines…"
+                        : item.gapState === "error"
+                          ? "Could not load hidden lines. Click to retry."
+                          : `${expandedGaps.has(`${item.file}:${item.hunk}`) ? "Hide" : "Show"} ${item.gapCount} hidden ${item.gapCount === 1 ? "line" : "lines"}`}
+                    </span>
+                  </button>
                 ) : item.kind === "hunk" ? (
                   <div className="hunk-label stream-hunk">
                     <span>
@@ -632,6 +768,20 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       </span>
                     )}
                   </div>
+                ) : item.kind === "context" ? (
+                  <CodeBlock
+                    rows={item.rows!}
+                    file={item.file}
+                    hunk={item.hunk!}
+                    reviewFile={files[item.file]}
+                    mode={mode}
+                    words={words}
+                    wrap={wrap}
+                    evidence={evidence[file.path]}
+                    readContent={readContent}
+                    displayHunk={item.displayHunk}
+                    interactive={false}
+                  />
                 ) : item.kind === "block" ? (
                   getBlock(item.key) ? (
                     <CodeBlock

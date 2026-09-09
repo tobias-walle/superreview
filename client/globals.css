@@ -623,6 +623,38 @@ button {
   color: var(--blue);
   opacity: 0.8;
 }
+.hunk-gap {
+  width: 100%;
+  height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 15px;
+  border-top: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 5%, var(--background));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.hunk-gap:hover {
+  background: color-mix(in srgb, var(--blue) 10%, var(--background));
+}
+.hunk-gap:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.hunk-gap svg {
+  width: 13px;
+  height: 13px;
+}
+.hunk-gap[aria-expanded="true"] svg {
+  transform: rotate(45deg);
+}
 .hunk + .hunk {
   border-top: 1px solid var(--border);
 }

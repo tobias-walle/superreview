@@ -106,6 +106,7 @@ export function Cell({
   hunk,
   side,
   highlight,
+  interactive = true,
 }: {
   line?: DiffLine;
   unified?: boolean;
@@ -114,41 +115,41 @@ export function Cell({
   hunk: number;
   side: "old" | "new";
   highlight?: HunkHighlight;
+  interactive?: boolean;
 }) {
   const c = useComments();
   const actualSide = unified ? (line?.kind === "del" ? "old" : "new") : side;
   const selected =
-    lineSelected(line, file, hunk, actualSide, c) ||
-    (unified && line?.kind === "context" && lineSelected(line, file, hunk, "old", c));
+    interactive &&
+    (lineSelected(line, file, hunk, actualSide, c) ||
+      (unified && line?.kind === "context" && lineSelected(line, file, hunk, "old", c)));
+  const lineNumber = (targetSide: "old" | "new") =>
+    targetSide === "old" ? line?.oldNo : line?.newNo;
+  const gutter = (targetSide: "old" | "new") =>
+    line && interactive ? (
+      <Gutter line={line} side={targetSide} file={file} hunk={hunk} />
+    ) : (
+      <span className="line-no">{lineNumber(targetSide)}</span>
+    );
   return (
     <div
       className={`code-cell ${line?.kind || "empty"} ${selected ? "comment-selected" : ""}`}
       data-comment-pos={
-        line ? `${c.meta[file]?.fingerprint}:${hunk}:${line.sourceIndex}` : undefined
+        line && interactive ? `${c.meta[file]?.fingerprint}:${hunk}:${line.sourceIndex}` : undefined
       }
     >
       {unified ? (
         <>
-          {line?.oldNo !== undefined ? (
-            <Gutter line={line} side="old" file={file} hunk={hunk} />
-          ) : (
-            <span className="line-no" />
-          )}
-          {line?.newNo !== undefined ? (
-            <Gutter line={line} side="new" file={file} hunk={hunk} />
-          ) : (
-            <span className="line-no" />
-          )}
+          {gutter("old")}
+          {gutter("new")}
         </>
-      ) : line ? (
-        <Gutter line={line} side={side} file={file} hunk={hunk} />
       ) : (
-        <span className="line-no" />
+        gutter(side)
       )}
       <span className="line-sign">
         {line?.kind === "add" ? "+" : line?.kind === "del" ? "−" : " "}
       </span>
-      {line && <Gutter line={line} side={actualSide} file={file} hunk={hunk} plus />}
+      {line && interactive && <Gutter line={line} side={actualSide} file={file} hunk={hunk} plus />}
       <code className="source">
         {line && (
           <Highlight

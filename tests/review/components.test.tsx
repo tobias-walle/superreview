@@ -14,7 +14,7 @@ import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkp
 import { agentRequest, exportThread } from "../../lib/review/markdown";
 import type { ReviewIdentity, Submission } from "../../lib/review/types";
 import type { Thread } from "../../lib/comments/model";
-import type { Hunk } from "../../lib/diff/render";
+import { hiddenContextBefore, type Hunk } from "../../lib/diff/render";
 import { highlightHunk, languageForPath } from "../../lib/syntax/highlight";
 
 test("document title identifies the project, branch, and comparison", () => {
@@ -105,6 +105,35 @@ test("syntax highlighting recognizes file types and preserves word highlights", 
   assert.match(html, /class="syntax-token"/);
   assert.match(html, /class="word-change"/);
   assert.equal(html.replace(/<[^>]+>/g, ""), "const answer");
+});
+
+test("hidden context is measured between adjacent hunks", () => {
+  const hunks: Hunk[] = [
+    {
+      header: "@@ -1,3 +1,3 @@",
+      oldStart: 1,
+      newStart: 1,
+      lines: [" first", "-before", "+after", " third"],
+    },
+    {
+      header: "@@ -10 +10 @@",
+      oldStart: 10,
+      newStart: 10,
+      lines: [" tenth"],
+    },
+  ];
+
+  assert.deepEqual(hiddenContextBefore(hunks, 1), {
+    oldStart: 4,
+    newStart: 4,
+    count: 6,
+  });
+  assert.equal(hiddenContextBefore(hunks, 0), undefined);
+  assert.equal(
+    hiddenContextBefore([hunks[0], { ...hunks[1], newStart: 11 }], 1),
+    undefined,
+    "only unchanged ranges can be expanded as shared context",
+  );
 });
 
 test("sidebar resizing follows its edge and respects width bounds", () => {

@@ -14,6 +14,26 @@ export type Hunk = {
   newStart: number;
   lines: string[];
 };
+export type HiddenContext = {
+  oldStart: number;
+  newStart: number;
+  count: number;
+};
+export function hiddenContextBefore(hunks: Hunk[], index: number): HiddenContext | undefined {
+  if (index <= 0 || index >= hunks.length) return undefined;
+  const previous = hunks[index - 1];
+  let oldStart = previous.oldStart;
+  let newStart = previous.newStart;
+  for (const line of previous.lines) {
+    if (line.startsWith("\\")) continue;
+    if (!line.startsWith("+")) oldStart++;
+    if (!line.startsWith("-")) newStart++;
+  }
+  const oldCount = hunks[index].oldStart - oldStart;
+  const newCount = hunks[index].newStart - newStart;
+  if (oldCount <= 0 || oldCount !== newCount) return undefined;
+  return { oldStart, newStart, count: oldCount };
+}
 export type ReviewFile = {
   sourceObjects?: { old: string | null; new: string | null };
   fingerprint?: string;
