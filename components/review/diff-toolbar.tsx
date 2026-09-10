@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Columns2, PanelLeft, Rows3, WrapText } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { FileNavigation } from "@/lib/diff/file-order";
 
 export type DiffMode = "unified" | "split";
 
@@ -8,8 +9,7 @@ export function DiffToolbar({
   mode,
   wordHighlights,
   wrapLines,
-  selected,
-  fileCount,
+  navigation,
   onModeChange,
   onOpenFiles,
   onToggleWordHighlights,
@@ -19,8 +19,7 @@ export function DiffToolbar({
   mode: DiffMode;
   wordHighlights: boolean;
   wrapLines: boolean;
-  selected: number;
-  fileCount: number;
+  navigation: FileNavigation;
   onModeChange: (mode: DiffMode) => void;
   onOpenFiles: () => void;
   onToggleWordHighlights: () => void;
@@ -71,20 +70,20 @@ export function DiffToolbar({
         <span className="toolbar-divider" />
         <button
           className="icon-button"
-          disabled={selected === 0}
-          onClick={() => onSelectFile(selected - 1)}
+          disabled={navigation.previous === undefined}
+          onClick={() => navigation.previous !== undefined && onSelectFile(navigation.previous)}
           aria-label="Previous file"
           title="Previous file · K"
         >
           <ArrowUp />
         </button>
         <span className="file-position">
-          {fileCount ? selected + 1 : 0} / {fileCount}
+          {navigation.position} / {navigation.count}
         </span>
         <button
           className="icon-button"
-          disabled={selected >= fileCount - 1}
-          onClick={() => onSelectFile(selected + 1)}
+          disabled={navigation.next === undefined}
+          onClick={() => navigation.next !== undefined && onSelectFile(navigation.next)}
           aria-label="Next file"
           title="Next file · J"
         >

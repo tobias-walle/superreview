@@ -1099,6 +1099,7 @@ button {
   --sticky-file-header-height: 46px;
   padding: 0 !important;
   overflow-anchor: none;
+  overscroll-behavior-y: contain;
   contain: strict;
 }
 .sticky-file-context {

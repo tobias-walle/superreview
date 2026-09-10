@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitCompareArrows } from "lucide-react";
 
 import { ChangedFilesSidebar } from "@/components/review/changed-files-sidebar";
@@ -18,6 +18,7 @@ import { useSidebarLayout } from "@/hooks/use-sidebar-layout";
 import { ThemeProvider, useTheme } from "@/hooks/use-theme";
 import { useViewportWidth } from "@/hooks/use-viewport-width";
 import { useWorkspaceShortcuts } from "@/hooks/use-workspace-shortcuts";
+import { fileDisplayOrder, fileNavigation } from "@/lib/diff/file-order";
 import type { Anchor } from "@/lib/comments/model";
 import { reviewDocumentTitle } from "@/client/document-title";
 
@@ -63,8 +64,13 @@ function Workspace() {
   const runtime = useReviewSession();
   const session = runtime.session!;
   const data = session.snapshot.data;
+  const fileOrder = useMemo(
+    () => fileDisplayOrder(data.files.map((file) => file.path)),
+    [data.files],
+  );
   const [selectedState, setSelected] = useState(0);
   const selected = Math.min(selectedState, Math.max(0, data.files.length - 1));
+  const navigation = useMemo(() => fileNavigation(fileOrder, selected), [fileOrder, selected]);
   const [mode, setMode] = useState<DiffMode>(() =>
     innerWidth < MOBILE_BREAKPOINT_PX ? "unified" : "split",
   );
@@ -110,8 +116,7 @@ function Workspace() {
     [],
   );
   useWorkspaceShortcuts({
-    selected,
-    fileCount: data.files.length,
+    navigation,
     onSelectFile: chooseFile,
     onToggleMode: toggleMode,
     onToggleTheme: toggleTheme,
@@ -155,8 +160,7 @@ function Workspace() {
                 mode={mode}
                 wordHighlights={words}
                 wrapLines={wrap}
-                selected={selected}
-                fileCount={data.files.length}
+                navigation={navigation}
                 onModeChange={setMode}
                 onOpenFiles={() => setFileDrawerOpen(true)}
                 onToggleWordHighlights={() => setWords((enabled) => !enabled)}
@@ -167,6 +171,7 @@ function Workspace() {
               <ContinuousDiff
                 preparationMs={model.preparationMs}
                 ref={diffRef}
+                fileOrder={fileOrder}
                 files={data.files}
                 evidence={session.snapshot.evidence}
                 readContent={runtime.readContent}

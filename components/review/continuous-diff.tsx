@@ -29,6 +29,7 @@ import {
   type RowPair,
 } from "@/lib/diff/render";
 import type { Evidence } from "@/lib/review/types";
+import { scrollBoundary } from "@/lib/diff/file-order";
 export type DiffHandle = {
   scrollToFile: (index: number) => void;
   scrollToAnchor: (anchor: Anchor) => void;
@@ -51,6 +52,7 @@ const DESKTOP_FILE_HEADER_GAP_PX = 18;
 const MOBILE_FILE_HEADER_GAP_PX = 14;
 type Props = {
   preparationMs: number;
+  fileOrder: readonly number[];
   files: ReviewFile[];
   evidence: Record<string, Evidence>;
   readContent: (object: string) => Promise<string>;
@@ -289,6 +291,7 @@ function FileHeader({
 export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousDiff(props, ref) {
   const {
     files,
+    fileOrder,
     meta,
     mode,
     wrap,
@@ -371,8 +374,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const { items, starts } = useMemo(() => {
     const items: Item[] = [],
       starts: number[] = [];
-    meta.forEach((file, fi) => {
-      starts.push(items.length);
+    fileOrder.forEach((fi) => {
+      const file = meta[fi];
+      if (!file) return;
+      starts[fi] = items.length;
       items.push({ key: `${fi}:header`, kind: "header", file: fi });
       if (collapsed.has(fi)) return;
       if (files[fi].binary) items.push({ key: `${fi}:binary`, kind: "binary", file: fi });
@@ -464,7 +469,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       items.push({ key: `${fi}:end`, kind: "end", file: fi });
     });
     return { items, starts };
-  }, [meta, files, mode, collapsed, expandedGaps, evidence, sourceContents]);
+  }, [fileOrder, meta, files, mode, collapsed, expandedGaps, evidence, sourceContents]);
   const estimate = useCallback(
     (i: number) => {
       const item = items[i];
@@ -527,7 +532,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     if (keys) request(keys.split("|"));
   }, [keys, request, version]);
   useEffect(() => {
-    const scroll = root.current?.scrollTop || 0;
+    // The offset can change while the virtual item range stays identical.
+    const scroll = scrollTop;
     const first = visible.find((v) => v.end > scroll + 2);
     if (first && items[first.index]) {
       anchor.current = items[first.index];
@@ -546,11 +552,20 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
           active = f;
           max = area;
         }
+      // At a scroll boundary, a short final/first file may occupy less area than its neighbor.
+      // Keep the counter and navigation aligned with the actual end, not the largest visible file.
+      const boundary = scrollBoundary(
+        scroll,
+        root.current?.clientHeight || 0,
+        root.current?.scrollHeight || 0,
+      );
+      if (boundary === "start") active = items[0].file;
+      if (boundary === "end") active = items[items.length - 1].file;
       if (navigationTarget.current !== undefined && (areas.get(navigationTarget.current) || 0) > 0)
         active = navigationTarget.current;
       onActive(active);
     }
-  }, [visible, items, onActive]);
+  }, [visible, items, onActive, scrollTop]);
   const layout = `${mode}:${wrap}:${Math.round(width)}`;
   useLayoutEffect(() => {
     if (previousLayout.current && previousLayout.current !== layout) {

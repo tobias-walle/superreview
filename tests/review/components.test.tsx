@@ -8,7 +8,13 @@ import { CopyButton } from "../../components/review/copy-button";
 import { Cell, Highlight } from "../../components/review/code";
 import { ThreadView } from "../../components/review/comment-thread";
 import { Composer } from "../../components/review/comment-editor";
-import { buildFileTreeEntries } from "../../components/review/file-tree";
+import {
+  buildFileTreeEntries,
+  fileDisplayOrder,
+  fileNavigation,
+  scrollBoundary,
+} from "../../lib/diff/file-order";
+import { DiffToolbar } from "../../components/review/diff-toolbar";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
 import { CommentContext, filterVisibleThreads, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
@@ -187,6 +193,96 @@ test("sidebar resizing follows its edge and respects width bounds", () => {
   assert.equal(resizeSidebarWidth(300, -40, -1, bounds), 340);
   assert.equal(resizeSidebarWidth(250, -100, 1, bounds), bounds.min);
   assert.equal(resizeSidebarWidth(300, -200, -1, bounds), bounds.max);
+});
+
+test("mixed tracked and untracked files follow the tree order without changing snapshot indices", () => {
+  const paths = [
+    "backend/changed.py",
+    "docs/tracing.md",
+    "frontend/mockServiceWorker.js",
+    "backend/tests/new_test.py",
+  ];
+  const original = [...paths];
+  const order = fileDisplayOrder(paths);
+  assert.deepEqual(order, [0, 3, 1, 2]);
+  assert.deepEqual(paths, original);
+  assert.deepEqual(
+    order.map((file) => paths[file]),
+    [
+      "backend/changed.py",
+      "backend/tests/new_test.py",
+      "docs/tracing.md",
+      "frontend/mockServiceWorker.js",
+    ],
+  );
+  const leaves = buildFileTreeEntries(paths, new Set()).flatMap((entry) =>
+    entry.kind === "file" ? [entry.file] : [],
+  );
+  assert.deepEqual(order, leaves);
+  assert.deepEqual(fileNavigation(order, 0), {
+    position: 1,
+    count: 4,
+    previous: undefined,
+    next: 3,
+  });
+  assert.deepEqual(fileNavigation(order, 3), { position: 2, count: 4, previous: 0, next: 1 });
+  assert.deepEqual(fileNavigation(order, 2), {
+    position: 4,
+    count: 4,
+    previous: 1,
+    next: undefined,
+  });
+  const closedLeaves = buildFileTreeEntries(paths, new Set(["backend"])).flatMap((entry) =>
+    entry.kind === "file" ? [entry.file] : [],
+  );
+  assert.deepEqual(closedLeaves, [1, 2]);
+  assert.deepEqual(
+    fileNavigation(order, 0).next,
+    3,
+    "collapsing a tree folder must not skip its files",
+  );
+});
+
+test("sequential navigation stops at both ends and handles empty and single-file reviews", () => {
+  for (const order of [[], [7], [0, 3, 1, 2]]) {
+    for (const selected of order.length ? [order[0], order.at(-1)!] : [0]) {
+      const navigation = fileNavigation(order, selected);
+      const html = renderToStaticMarkup(
+        <DiffToolbar
+          mode="unified"
+          wordHighlights
+          wrapLines
+          navigation={navigation}
+          onModeChange={() => {}}
+          onOpenFiles={() => {}}
+          onToggleWordHighlights={() => {}}
+          onToggleWrapLines={() => {}}
+          onSelectFile={() => {}}
+        />,
+      );
+      const buttons = html.match(/<button[^>]*>/g)!;
+      const previous = buttons.find((button) => button.includes('aria-label="Previous file"'))!;
+      const next = buttons.find((button) => button.includes('aria-label="Next file"'))!;
+      assert.equal(previous.includes("disabled"), navigation.previous === undefined);
+      assert.equal(next.includes("disabled"), navigation.next === undefined);
+      assert.ok(html.includes(`${navigation.position} / ${navigation.count}`));
+    }
+  }
+  assert.deepEqual(fileNavigation([0, 3], 99), {
+    position: 0,
+    count: 2,
+    previous: undefined,
+    next: undefined,
+  });
+});
+
+test("scroll boundaries recognize rounded offsets without treating the middle as an end", () => {
+  assert.equal(scrollBoundary(0, 600, 2000), "start");
+  assert.equal(scrollBoundary(-1, 600, 2000), "start");
+  assert.equal(scrollBoundary(300, 600, 2000), undefined);
+  assert.equal(scrollBoundary(1399.5, 600, 2000), "end");
+  assert.equal(scrollBoundary(1400, 600, 2000), "end");
+  assert.equal(scrollBoundary(0, 600, 400), "start");
 });
 
 test("file tree compacts chains containing only one folder", () => {

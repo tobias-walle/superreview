@@ -7,32 +7,7 @@ import { useComments } from "@/hooks/use-comments";
 import { MessageSquare } from "lucide-react";
 import { FileIcon } from "./code";
 import type { ReviewFile } from "@/lib/diff/render";
-export type FileTreeEntry =
-  | {
-      kind: "folder";
-      key: string;
-      label: string;
-      path: string;
-      depth: number;
-      count: number;
-    }
-  | {
-      kind: "file";
-      key: string;
-      file: number;
-      depth: number;
-    };
-
-type FolderNode = {
-  kind: "folder";
-  name: string;
-  path: string;
-  count: number;
-  children: Array<FolderNode | FileNode>;
-  folders: Map<string, FolderNode>;
-};
-
-type FileNode = { kind: "file"; path: string; file: number };
+import { buildFileTreeEntries } from "@/lib/diff/file-order";
 
 const TREE_ROW_HEIGHT_PX = 34;
 const TREE_DEPTH_INDENT_PX = 15;
@@ -42,77 +17,6 @@ type TreeIndentStyle = CSSProperties & { "--tree-indent": string };
 
 function treeIndent(depth: number): TreeIndentStyle {
   return { "--tree-indent": `${depth * TREE_DEPTH_INDENT_PX}px` };
-}
-
-export function buildFileTreeEntries(
-  paths: string[],
-  closed: ReadonlySet<string>,
-): FileTreeEntry[] {
-  const root: FolderNode = {
-    kind: "folder",
-    name: "",
-    path: "",
-    count: 0,
-    children: [],
-    folders: new Map(),
-  };
-
-  paths.forEach((path, file) => {
-    const parts = path.split("/");
-    let parent = root;
-    parent.count++;
-
-    for (let depth = 0; depth < parts.length - 1; depth++) {
-      const name = parts[depth];
-      const folderPath = parts.slice(0, depth + 1).join("/");
-      let folder = parent.folders.get(name);
-      if (!folder) {
-        folder = {
-          kind: "folder",
-          name,
-          path: folderPath,
-          count: 0,
-          children: [],
-          folders: new Map(),
-        };
-        parent.folders.set(name, folder);
-        parent.children.push(folder);
-      }
-      folder.count++;
-      parent = folder;
-    }
-
-    parent.children.push({ kind: "file", path, file });
-  });
-
-  const entries: FileTreeEntry[] = [];
-  const appendChildren = (children: Array<FolderNode | FileNode>, depth: number) => {
-    for (const child of children) {
-      if (child.kind === "file") {
-        entries.push({ kind: "file", key: child.path, file: child.file, depth });
-        continue;
-      }
-
-      const labels = [child.name];
-      let folder = child;
-      while (folder.children.length === 1 && folder.children[0].kind === "folder") {
-        folder = folder.children[0];
-        labels.push(folder.name);
-      }
-      entries.push({
-        kind: "folder",
-        key: `folder:${folder.path}`,
-        label: labels.join("/"),
-        path: folder.path,
-        depth,
-        count: folder.count,
-      });
-      if (!closed.has(folder.path)) appendChildren(folder.children, depth + 1);
-    }
-  };
-
-  appendChildren(root.children, 0);
-  return entries;
 }
 
 export function FileTree({
