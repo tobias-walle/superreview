@@ -121,17 +121,27 @@ export function renderHunk(h: Hunk, budget = createWordDiffBudget()) {
     }
     while (pi < plus.length) split.push([undefined, plus[pi++]]);
   }
-  return { split, unified: lines, simplified };
+  return { split, unified: lines, new: lines.filter((line) => line.kind !== "del"), simplified };
 }
 
 export const BLOCK_ROWS = 24;
 export type RowPair = [DiffLine | undefined, DiffLine | undefined];
 export type BlockMeta = { count: number; lengths: number[]; sources: number[] };
+
+export function blockIndexForSource(blocks: readonly BlockMeta[], source: number) {
+  const exact = blocks.findIndex((block) => block.sources.includes(source));
+  // Split blocks can contain distant old/new source indices. Search for an exact
+  // match before falling forward when a deletion has been hidden.
+  return exact >= 0
+    ? exact
+    : blocks.findIndex((block) => block.sources.some((next) => next > source));
+}
 export type HunkMeta = {
   header: string;
   sourceCount: number;
   split: BlockMeta[];
   unified: BlockMeta[];
+  new: BlockMeta[];
   simplified: boolean;
 };
 export type FileMeta = { fingerprint: string; hunks: HunkMeta[] };
@@ -163,6 +173,10 @@ export function buildFileModel(file: ReviewFile, budget = createWordDiffBudget()
         unified: blocks(
           h.unified.map((r) => r.text.length),
           h.unified.map((r) => [r.sourceIndex]),
+        ),
+        new: blocks(
+          h.new.map((r) => r.text.length),
+          h.new.map((r) => [r.sourceIndex]),
         ),
       };
     }),

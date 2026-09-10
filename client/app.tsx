@@ -75,6 +75,7 @@ function Workspace() {
     innerWidth < MOBILE_BREAKPOINT_PX ? "unified" : "split",
   );
   const [wrap, setWrap] = useState(true);
+  const [hideDeletions, setHideDeletions] = useState(false);
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(true);
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
@@ -106,6 +107,7 @@ function Workspace() {
   );
   const syncActiveFile = useCallback((file: number) => setSelected(file), []);
   const jumpToComment = useCallback((anchor: Anchor) => {
+    if (anchor.side === "old") setHideDeletions(false);
     setCommentDrawerOpen(false);
     diffRef.current?.scrollToAnchor(anchor);
   }, []);
@@ -157,6 +159,8 @@ function Workspace() {
               />
               <DiffToolbar
                 mode={mode}
+                hideDeletions={hideDeletions}
+                onHideDeletionsChange={setHideDeletions}
                 wrapLines={wrap}
                 navigation={navigation}
                 onModeChange={setMode}
@@ -175,6 +179,8 @@ function Workspace() {
                 meta={model.meta}
                 error={model.error}
                 mode={mode}
+                hideDeletions={mode === "unified" && hideDeletions}
+                onShowDeletions={() => setHideDeletions(false)}
                 wrap={wrap}
                 words
                 viewed={progress.viewed}

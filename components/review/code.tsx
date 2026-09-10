@@ -101,6 +101,7 @@ export function Highlight({
 export function Cell({
   line,
   unified,
+  newSideOnly = false,
   words,
   file,
   hunk,
@@ -110,6 +111,7 @@ export function Cell({
 }: {
   line?: DiffLine;
   unified?: boolean;
+  newSideOnly?: boolean;
   words: boolean;
   file: number;
   hunk: number;
@@ -140,7 +142,7 @@ export function Cell({
     >
       {unified ? (
         <>
-          {gutter("old")}
+          {!newSideOnly && gutter("old")}
           {gutter("new")}
         </>
       ) : (

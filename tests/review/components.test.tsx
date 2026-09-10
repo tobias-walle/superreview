@@ -21,7 +21,13 @@ import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkp
 import { agentRequest, exportThread } from "../../lib/review/markdown";
 import type { ReviewIdentity, Submission } from "../../lib/review/types";
 import type { Draft, Thread } from "../../lib/comments/model";
-import { hiddenContextBefore, type Hunk } from "../../lib/diff/render";
+import {
+  buildFileModel,
+  blockIndexForSource,
+  BLOCK_ROWS,
+  hiddenContextBefore,
+  type Hunk,
+} from "../../lib/diff/render";
 import { highlightHunk, languageForPath } from "../../lib/syntax/highlight";
 
 test("unified gutters only offer commenting on sides with an actual line", () => {
@@ -250,6 +256,8 @@ test("sequential navigation stops at both ends and handles empty and single-file
       const html = renderToStaticMarkup(
         <DiffToolbar
           mode="unified"
+          hideDeletions={false}
+          onHideDeletionsChange={() => {}}
           wrapLines
           navigation={navigation}
           onModeChange={() => {}}
@@ -273,6 +281,127 @@ test("sequential navigation stops at both ends and handles empty and single-file
     previous: undefined,
     next: undefined,
   });
+});
+
+test("Hide deletions is offered only in unified layout", () => {
+  for (const mode of ["unified", "split"] as const) {
+    const html = renderToStaticMarkup(
+      <DiffToolbar
+        mode={mode}
+        hideDeletions
+        onHideDeletionsChange={() => {}}
+        wrapLines
+        navigation={fileNavigation([0], 0)}
+        onModeChange={() => {}}
+        onOpenFiles={() => {}}
+        onToggleWrapLines={() => {}}
+        onSelectFile={() => {}}
+      />,
+    );
+    assert.equal(html.includes('aria-label="Hide deletions"'), mode === "unified");
+    assert.doesNotMatch(html, /Toggle word highlights/);
+  }
+});
+
+test("filtered diffs retain new line numbers, source identities and bounded blocks", () => {
+  const lines = [
+    " context",
+    "-const value = 1",
+    "+const value = 2",
+    " next",
+    ...Array.from({ length: BLOCK_ROWS * 3 }, (_, i) => `+new ${i}`),
+  ];
+  const file = {
+    path: "example.ts",
+    status: "M",
+    additions: lines.length - 3,
+    deletions: 1,
+    hunks: [{ header: "@@", oldStart: 10, newStart: 10, lines }],
+  };
+  const model = buildFileModel(file);
+  const rendered = model.hunks[0];
+  assert.deepEqual(
+    rendered.new.slice(0, 3).map((line) => [line.newNo, line.sourceIndex]),
+    [
+      [10, 0],
+      [11, 2],
+      [12, 3],
+    ],
+  );
+  assert.ok(rendered.new.every((line) => line.kind !== "del"));
+  assert.ok(rendered.new[1].parts.some((part) => part.changed));
+  assert.equal(rendered.unified[1].kind, "del", "filtering must not mutate the full diff");
+  const metadata = model.metadata.hunks[0];
+  assert.ok(metadata.new.every((block) => block.count <= BLOCK_ROWS));
+  const visibleSources = metadata.new.flatMap((block) => block.sources);
+  assert.equal(
+    visibleSources.includes(1),
+    false,
+    "a hidden deletion must not be reported as viewed coverage",
+  );
+  assert.equal(metadata.sourceCount, lines.length, "full-diff coverage still requires deletions");
+  assert.equal(visibleSources.length, metadata.sourceCount - 1);
+  assert.deepEqual(file.hunks[0].lines, lines);
+  const deleted = buildFileModel({
+    ...file,
+    status: "D",
+    hunks: [{ header: "@@", oldStart: 1, newStart: 0, lines: ["-gone", "-also gone"] }],
+  });
+  assert.equal(deleted.metadata.hunks[0].new.length, 0);
+  assert.equal(deleted.metadata.hunks[0].sourceCount, 2);
+});
+
+test("layout restoration prefers exact source identity before falling past hidden deletions", () => {
+  const blocks = [
+    [0, 90],
+    [24, 114],
+    [48, 138],
+  ].map((sources) => ({ sources, count: 1, lengths: [10] }));
+  assert.equal(
+    blockIndexForSource(blocks, 48),
+    2,
+    "large new-side indices in an earlier split block must not steal the match",
+  );
+  const filtered = [
+    [90, 91],
+    [114, 115],
+  ].map((sources) => ({ sources, count: 2, lengths: [10, 10] }));
+  assert.equal(blockIndexForSource(filtered, 114), 1);
+  assert.equal(blockIndexForSource(filtered, 2), 0);
+  assert.equal(blockIndexForSource(filtered, 200), -1);
+});
+
+test("filtered unified cells expose only the new-side gutter", () => {
+  const comments = {
+    data: { files: [{ path: "example.ts" }] },
+    meta: [{ fingerprint: "f" }],
+    drafts: [],
+    threads: [],
+    selection: null,
+    editor: null,
+  } as unknown as Comments;
+  const html = renderToStaticMarkup(
+    <CommentContext.Provider value={comments}>
+      <Cell
+        file={0}
+        hunk={0}
+        side="new"
+        unified
+        newSideOnly
+        words
+        line={{
+          kind: "context",
+          oldNo: 7,
+          newNo: 12,
+          sourceIndex: 3,
+          text: "context",
+          parts: [{ text: "context", changed: false }],
+        }}
+      />
+    </CommentContext.Provider>,
+  );
+  assert.match(html, /Select new line 12/);
+  assert.doesNotMatch(html, /Select old line/);
 });
 
 test("scroll boundaries recognize rounded offsets without treating the middle as an end", () => {

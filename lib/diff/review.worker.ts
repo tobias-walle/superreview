@@ -20,7 +20,7 @@ function rowsFor(key: string) {
     end = (+blockIndex + 1) * BLOCK_ROWS;
   return mode === "split"
     ? hunk?.split.slice(start, end)
-    : hunk?.unified.slice(start, end).map((line) => [line]);
+    : hunk?.[mode === "new" ? "new" : "unified"].slice(start, end).map((line) => [line]);
 }
 function sendBlocks(keys: string[]) {
   const ready: Array<[string, ReturnType<typeof rowsFor>]> = [];

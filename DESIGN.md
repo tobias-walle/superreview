@@ -14,6 +14,7 @@ A dense, calm workspace for reading code and giving precise feedback. The diff i
 - Desktop: file tree left, continuous diff center, resizable comments overview right. Keep file headings and navigation easy to find while scrolling.
 - The tree, continuous diff, counter and sequential navigation share one folder-grouped file order. Collapsing tree folders does not skip their files. Scrolling and navigation stop at the ends without wrapping or jumping to unread files.
 - Unified and split views share selection, comments and progress. Switching layout must not reset the review.
+- Unified offers “Hide deletions”: show context and additions with new-side numbers only. Split always shows both sides. Keep deleted files discoverable with a Show deletions action. Opening an old-side comment or draft from the overview reveals deletions. Hidden lines never count as viewed.
 - Mobile: default to unified; use drawers for files/comments and a bottom sheet for the editor. No page-wide horizontal overflow. Keep explicit desktop simulation with a clear return action.
 - Clicking a line number opens a comment directly. Avoid overlapping gutter actions. Dragging line numbers opens it on release. Shift-click adjusts a new draft's range around its original starting line without losing text. Plain clicks elsewhere preserve the previous draft. Replies and existing thread anchors never move.
 - Show side and line range while writing. On mobile, provide start/end line fields for visible snapshot lines. Keep drafts when closing the editor.

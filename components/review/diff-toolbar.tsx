@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Columns2, PanelLeft, Rows3, WrapText } from "lucide-react";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { FileNavigation } from "@/lib/diff/file-order";
 
@@ -7,6 +8,8 @@ export type DiffMode = "unified" | "split";
 
 export function DiffToolbar({
   mode,
+  hideDeletions,
+  onHideDeletionsChange,
   wrapLines,
   navigation,
   onModeChange,
@@ -15,6 +18,8 @@ export function DiffToolbar({
   onSelectFile,
 }: {
   mode: DiffMode;
+  hideDeletions: boolean;
+  onHideDeletionsChange: (hide: boolean) => void;
   wrapLines: boolean;
   navigation: FileNavigation;
   onModeChange: (mode: DiffMode) => void;
@@ -43,6 +48,19 @@ export function DiffToolbar({
           </TabsTrigger>
         </TabsList>
       </Tabs>
+      {mode === "unified" && (
+        <label
+          className="hide-deletions"
+          title="Hide deleted lines. Hidden deletions do not count as viewed."
+        >
+          <Checkbox
+            checked={hideDeletions}
+            onCheckedChange={(value) => onHideDeletionsChange(value === true)}
+            aria-label="Hide deletions"
+          />
+          Hide deletions
+        </label>
+      )}
       <div className="toolbar-right">
         <button
           className={`icon-button ${wrapLines ? "active" : ""}`}

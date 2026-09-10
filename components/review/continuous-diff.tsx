@@ -20,6 +20,7 @@ import { useLineVisibility } from "@/hooks/use-line-visibility";
 import { useSyntaxHighlighting } from "@/hooks/use-syntax-highlighting";
 import {
   BLOCK_ROWS,
+  blockIndexForSource,
   hiddenContextBefore,
   renderHunk,
   type BlockMeta,
@@ -36,7 +37,7 @@ export type DiffHandle = {
 };
 type Item = {
   key: string;
-  kind: "header" | "hunk" | "gap" | "block" | "context" | "end" | "binary";
+  kind: "header" | "hunk" | "gap" | "block" | "context" | "end" | "binary" | "filtered-empty";
   file: number;
   hunk?: number;
   block?: number;
@@ -59,6 +60,8 @@ type Props = {
   meta: FileMeta[];
   error: string;
   mode: string;
+  hideDeletions: boolean;
+  onShowDeletions: () => void;
   wrap: boolean;
   words: boolean;
   viewed: boolean[];
@@ -82,6 +85,7 @@ const CodeBlock = memo(function CodeBlock({
   evidence,
   readContent,
   displayHunk,
+  newSideOnly = false,
   interactive = true,
 }: {
   rows: RowPair[];
@@ -94,6 +98,7 @@ const CodeBlock = memo(function CodeBlock({
   evidence: Evidence;
   readContent: Props["readContent"];
   displayHunk?: Hunk;
+  newSideOnly?: boolean;
   interactive?: boolean;
 }) {
   const sourceObjects = reviewFile.sourceObjects || {
@@ -137,6 +142,7 @@ const CodeBlock = memo(function CodeBlock({
                 line={r[0]}
                 words={words}
                 unified={mode === "unified"}
+                newSideOnly={newSideOnly}
                 file={file}
                 hunk={hunk}
                 side="old"
@@ -294,6 +300,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     fileOrder,
     meta,
     mode,
+    hideDeletions,
+    onShowDeletions,
     wrap,
     words,
     viewed,
@@ -371,6 +379,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     observer.observe(root.current);
     return () => observer.disconnect();
   }, []);
+  const blockMode = hideDeletions ? "new" : mode === "split" ? "split" : "unified";
   const { items, starts } = useMemo(() => {
     const items: Item[] = [],
       starts: number[] = [];
@@ -380,6 +389,11 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       starts[fi] = items.length;
       items.push({ key: `${fi}:header`, kind: "header", file: fi });
       if (collapsed.has(fi)) return;
+      if (hideDeletions && !files[fi].binary && file.hunks.every((hunk) => !hunk.new.length)) {
+        items.push({ key: `${fi}:filtered-empty`, kind: "filtered-empty", file: fi });
+        items.push({ key: `${fi}:end`, kind: "end", file: fi });
+        return;
+      }
       if (files[fi].binary) items.push({ key: `${fi}:binary`, kind: "binary", file: fi });
       // Include a final divider so the captured file's tail can be revealed lazily.
       [...file.hunks, undefined].forEach((h, hi) => {
@@ -454,10 +468,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
             file: fi,
             hunk: hi,
           });
-        const blocks = mode === "split" ? h.split : h.unified;
+        const blocks = h[blockMode];
         blocks.forEach((block, bi) =>
           items.push({
-            key: `${fi}:${hi}:${mode}:${bi}`,
+            key: `${fi}:${hi}:${blockMode}:${bi}`,
             kind: "block",
             file: fi,
             hunk: hi,
@@ -469,7 +483,18 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       items.push({ key: `${fi}:end`, kind: "end", file: fi });
     });
     return { items, starts };
-  }, [fileOrder, meta, files, mode, collapsed, expandedGaps, evidence, sourceContents]);
+  }, [
+    fileOrder,
+    meta,
+    files,
+    mode,
+    blockMode,
+    hideDeletions,
+    collapsed,
+    expandedGaps,
+    evidence,
+    sourceContents,
+  ]);
   const estimate = useCallback(
     (i: number) => {
       const item = items[i];
@@ -479,7 +504,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         );
       if (item.kind === "hunk" || item.kind === "gap") return HUNK_HEADER_HEIGHT_PX;
       if (item.kind === "end") return 32;
-      if (item.kind === "binary") return 96;
+      if (item.kind === "binary" || item.kind === "filtered-empty") return 96;
       const narrow = width < 700;
       const lineHeight = mode === "split" && narrow ? 21 : 23;
       const contentWidth = width - (narrow ? 20 : 56),
@@ -566,24 +591,29 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       onActive(active);
     }
   }, [visible, items, onActive, scrollTop]);
-  const layout = `${mode}:${wrap}:${Math.round(width)}`;
+  const layout = `${mode}:${hideDeletions}:${wrap}:${Math.round(width)}`;
   useLayoutEffect(() => {
     if (previousLayout.current && previousLayout.current !== layout) {
       const old = anchor.current;
       virtual.measure();
-      const target = old
-        ? items.findIndex(
-            (i) =>
-              i.file === old.file &&
-              i.kind === old.kind &&
-              i.hunk === old.hunk &&
-              i.block === old.block,
+      const candidates = old
+        ? items.filter(
+            (item) => item.file === old.file && item.kind === old.kind && item.hunk === old.hunk,
           )
-        : -1;
-      if (target >= 0) virtual.scrollToIndex(target, { align: "start" });
+        : [];
+      const candidateIndex =
+        old?.kind === "block"
+          ? blockIndexForSource(
+              candidates.map((item) => item.meta!),
+              old.meta!.sources[0],
+            )
+          : candidates.findIndex((item) => item.block === old?.block);
+      const target = candidates[candidateIndex];
+      const restored = target ? items.indexOf(target) : old ? starts[old.file] : undefined;
+      if (restored !== undefined) virtual.scrollToIndex(restored, { align: "start" });
     }
     previousLayout.current = layout;
-  }, [layout, virtual, items]);
+  }, [layout, virtual, items, starts]);
   useImperativeHandle(
     ref,
     () => ({
@@ -818,6 +848,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                     evidence={evidence[file.path]}
                     readContent={readContent}
                     displayHunk={item.displayHunk}
+                    newSideOnly={hideDeletions}
                     interactive={false}
                   />
                 ) : item.kind === "block" ? (
@@ -828,6 +859,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       hunk={item.hunk!}
                       reviewFile={files[item.file]}
                       mode={mode}
+                      newSideOnly={hideDeletions}
                       words={words}
                       wrap={wrap}
                       evidence={evidence[file.path]}
@@ -842,6 +874,17 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                       <span>Loading lines…</span>
                     </div>
                   )
+                ) : item.kind === "filtered-empty" ? (
+                  <div className="filtered-file-notice">
+                    <span>
+                      {file.status === "D"
+                        ? "Deleted file · No new content"
+                        : "No resulting lines in this diff"}
+                    </span>
+                    <button className="control" onClick={onShowDeletions}>
+                      Show deletions
+                    </button>
+                  </div>
                 ) : item.kind === "binary" ? (
                   <div className="binary-notice">
                     Binary file changed. Mark it viewed manually after checking the file.
