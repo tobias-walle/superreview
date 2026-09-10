@@ -1634,22 +1634,43 @@ button {
 .comment-thread.thread-resolved:not(.thread-active) {
   border-color: color-mix(in srgb, var(--border) 75%, transparent);
 }
-.comment-thread.thread-resolved .thread-summary {
+.comment-thread.thread-resolved .thread-header {
   background: color-mix(in srgb, var(--surface) 55%, var(--background));
 }
 .comment-thread.thread-resolved .thread-summary > svg:nth-of-type(2) {
   color: var(--green);
 }
+.thread-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-right: 8px;
+  background: color-mix(in srgb, var(--mauve) 4%, var(--background));
+}
+.thread-header > .copy-fallback {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 0 8px 8px;
+}
+.thread-header > .control,
+.thread-header > .icon-button {
+  flex-shrink: 0;
+}
+.thread-resolve {
+  font-size: 12px;
+}
 .thread-summary {
   display: flex;
-  width: 100%;
+  flex: 1;
+  width: auto;
   align-items: center;
   gap: 8px;
   text-align: left;
   padding: 10px 12px;
   min-width: 0;
   font-size: 12px;
-  background: color-mix(in srgb, var(--mauve) 4%, var(--background));
+  background: transparent;
 }
 .thread-summary > svg {
   width: 14px;
@@ -1658,6 +1679,9 @@ button {
   color: var(--mauve);
 }
 .thread-location {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--mauve);
   white-space: nowrap;
   font: 12px var(--font-mono);
@@ -1857,16 +1881,17 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 6px;
   font-size: 12px;
   color: var(--mauve);
 }
-.composer-anchor strong {
-  font-size: 13px;
-  color: var(--foreground);
-}
-.composer-anchor > span {
+.composer-anchor .icon-button {
   margin-left: auto;
+  flex-shrink: 0;
+}
+.composer-location {
   font: 12px var(--font-mono);
+  white-space: nowrap;
 }
 .composer-anchor svg {
   width: 15px;
@@ -1879,8 +1904,10 @@ button {
   margin: 2px 0 8px;
 }
 .composer-range-hint {
-  display: block;
-  margin-bottom: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--overlay);
 }
@@ -1920,19 +1947,6 @@ button {
 .mobile-comment-composer .composer-range-hint {
   display: none;
 }
-.comment-tabs {
-  gap: 6px;
-}
-.comment-tabs [data-slot="tabs-list"] {
-  height: 31px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 2px;
-}
-.comment-tabs [data-slot="tabs-trigger"] {
-  font-size: 12px;
-  padding: 4px 12px;
-}
 .comment-composer textarea {
   display: block;
   width: 100%;
@@ -1950,14 +1964,6 @@ button {
 .comment-composer textarea:focus {
   border-color: var(--mauve);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mauve) 10%, transparent);
-}
-.markdown-preview {
-  min-height: var(--comment-editor-min-height);
-  max-height: var(--comment-editor-max-height);
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 9px 10px;
 }
 .composer-footer {
   display: flex;
@@ -2113,6 +2119,14 @@ button {
   }
   .mobile-comment-composer .comment-primary {
     min-height: 38px;
+  }
+  .thread-resolve span {
+    display: none;
+  }
+  .thread-resolve {
+    padding: 0;
+    width: 32px;
+    height: 32px;
   }
   .thread-summary {
     padding: 10px 8px;
@@ -2417,17 +2431,6 @@ button {
   border: 1px solid var(--surface);
   background: var(--background);
   border-radius: 7px;
-}
-.thread-tools {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--surface);
-}
-.thread-tools .control {
-  font-size: 12px;
-  min-height: 26px;
 }
 .copy-fallback {
   display: block;

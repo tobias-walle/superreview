@@ -7,13 +7,14 @@ import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
 import { Cell, Highlight } from "../../components/review/code";
 import { ThreadView } from "../../components/review/comment-thread";
+import { Composer } from "../../components/review/comment-editor";
 import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
 import { CommentContext, filterVisibleThreads, type Comments } from "../../hooks/use-comments";
 import { canMarkAutomatically, checkpointMatches } from "../../lib/review/checkpoints";
 import { agentRequest, exportThread } from "../../lib/review/markdown";
 import type { ReviewIdentity, Submission } from "../../lib/review/types";
-import type { Thread } from "../../lib/comments/model";
+import type { Draft, Thread } from "../../lib/comments/model";
 import { hiddenContextBefore, type Hunk } from "../../lib/diff/render";
 import { highlightHunk, languageForPath } from "../../lib/syntax/highlight";
 
@@ -277,7 +278,55 @@ test("a previous-diff thread remains readable and resolved state is a separate r
   assert.match(html, /Copy thread/);
   assert.match(html, /aria-expanded="true"/);
   assert.match(html, /Legacy author unknown/);
+  const header = html.slice(
+    html.indexOf('class="thread-header"'),
+    html.indexOf('class="thread-content"'),
+  );
+  assert.match(header, /aria-label="Reopen thread"/);
+  assert.match(header, /aria-label="Copy thread"/);
+  assert.ok(header.indexOf("</button>") < header.indexOf('aria-label="Reopen thread"'));
+  assert.doesNotMatch(html, /thread-tools/);
 });
+test("composers keep Markdown editing without preview and only standalone editors repeat the path", () => {
+  const draft: Draft = {
+    id: "draft",
+    body: "**Keep my text**",
+    anchor: {
+      path: "src/example.ts",
+      fingerprint: "f",
+      side: "new",
+      start: { line: 3, hunk: 0, source: 2, text: "start" },
+      end: { line: 5, hunk: 0, source: 4, text: "end" },
+      excerpt: "start\nend",
+    },
+  };
+  const comments = { error: "" } as unknown as Comments;
+  for (const variant of [
+    draft,
+    { ...draft, threadId: "t" },
+    { ...draft, threadId: "t", messageId: "m" },
+  ]) {
+    for (const inline of [true, false]) {
+      const html = renderToStaticMarkup(
+        <CommentContext.Provider value={comments}>
+          <Composer draft={variant} inline={inline} />
+        </CommentContext.Provider>,
+      );
+      assert.match(html, /<textarea[^>]*aria-label="Comment Markdown"/);
+      assert.match(html, /\*\*Keep my text\*\*/);
+      assert.match(html, /Draft saved/);
+      assert.doesNotMatch(html, /Preview|role="tab|markdown-preview/);
+      assert.equal(html.includes('class="composer-path"'), !inline);
+      assert.equal(html.includes('aria-label="Start line"'), !variant.threadId);
+      assert.equal(html.includes("Shift-click to adjust"), !variant.threadId);
+    }
+  }
+  const copy = renderToStaticMarkup(<CopyButton text="thread" label="Copy thread" iconOnly />);
+  assert.match(copy, /aria-label="Copy thread"/);
+  assert.match(copy, /title="Copy thread"/);
+  assert.doesNotMatch(copy, />Copy thread</);
+});
+
 test("resolved comments are hidden unless requested or they contain a draft", () => {
   const open = { id: "open", resolved: false } as Thread;
   const resolved = { id: "resolved", resolved: true } as Thread;

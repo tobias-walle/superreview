@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Markdown } from "./markdown";
-
-import { MessageSquare, X, Send } from "lucide-react";
-
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { X, Send } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -64,21 +60,21 @@ function DraftRange({ draft }: { draft: Draft }) {
   );
 }
 
-export function Composer({ draft }: { draft: Draft }) {
+export function Composer({ draft, inline = false }: { draft: Draft; inline?: boolean }) {
   const c = useComments();
-  const [tab, setTab] = useState("write");
+  const adjustable = !draft.threadId && !draft.messageId && draft.anchor.kind !== "file";
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     input.current?.focus({ preventScroll: true });
   }, [draft.id]);
   return (
     <div className="comment-composer" data-composer={draft.id}>
-      <div className="composer-anchor">
-        <MessageSquare />
-        <strong>
-          {draft.messageId ? "Edit comment" : draft.threadId ? "Reply" : "New comment"}
-        </strong>
-        <span>{label(draft.anchor)}</span>
+      <div className="composer-anchor" title={draft.anchor.path}>
+        <span className="composer-location">
+          {draft.messageId ? "Edit · " : draft.threadId ? "Reply · " : ""}
+          {label(draft.anchor)}
+        </span>
+        {adjustable && <span className="composer-range-hint">Shift-click to adjust</span>}
         <button
           className="icon-button"
           onClick={() => c.setEditor(null)}
@@ -87,49 +83,31 @@ export function Composer({ draft }: { draft: Draft }) {
           <X />
         </button>
       </div>
-      <div className="composer-path" title={draft.anchor.path}>
-        {draft.anchor.path}
-      </div>
-      {!draft.threadId && !draft.messageId && draft.anchor.kind !== "file" && (
-        <>
-          <span className="composer-range-hint">Shift-click a line to adjust range</span>
-          <DraftRange key={`${draft.anchor.start.line}-${draft.anchor.end.line}`} draft={draft} />
-        </>
+      {!inline && (
+        <div className="composer-path" title={draft.anchor.path}>
+          {draft.anchor.path}
+        </div>
       )}
-      <Tabs value={tab} onValueChange={setTab} className="comment-tabs">
-        <TabsList aria-label="Comment editor mode">
-          <TabsTrigger value="write">Write</TabsTrigger>
-          <TabsTrigger value="preview">Preview</TabsTrigger>
-        </TabsList>
-        <TabsContent value="write">
-          <textarea
-            ref={input}
-            aria-label="Comment Markdown"
-            placeholder={draft.threadId ? "Write a reply…" : "What should change, and why?"}
-            value={draft.body}
-            maxLength={30000}
-            onChange={(e) => c.updateDraft(draft.id, e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                c.save(draft.id);
-              }
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="preview">
-          <div className="markdown-preview">
-            {draft.body.trim() ? (
-              <Markdown body={draft.body} />
-            ) : (
-              <p className="comment-muted">Nothing to preview yet.</p>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      {adjustable && (
+        <DraftRange key={`${draft.anchor.start.line}-${draft.anchor.end.line}`} draft={draft} />
+      )}
+      <textarea
+        ref={input}
+        aria-label="Comment Markdown"
+        placeholder={draft.threadId ? "Write a reply…" : "What should change, and why?"}
+        value={draft.body}
+        maxLength={30000}
+        onChange={(e) => c.updateDraft(draft.id, e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            c.save(draft.id);
+          }
+        }}
+      />
       <div className="composer-footer">
         <span title="Markdown supported. Cmd or Ctrl + Enter to save.">
-          Markdown · {c.error ? "Not saved" : "Draft saved"}
+          {c.error ? "Not saved" : "Draft saved"} · Markdown
         </span>
         <button className="comment-text-button" onClick={() => c.discard(draft.id)}>
           Discard

@@ -5,6 +5,7 @@ import { exportThread } from "@/lib/review/markdown";
 import {
   MessageSquare,
   CheckCircle2,
+  RotateCcw,
   ChevronDown,
   ChevronRight,
   CornerDownRight,
@@ -25,37 +26,50 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
       className={`comment-thread ${thread.resolved ? "thread-resolved" : ""} ${expanded ? "thread-active" : ""}`}
       data-thread={thread.id}
     >
-      <button
-        className="thread-summary"
-        aria-expanded={expanded}
-        onClick={() => {
-          c.setActive(expanded ? null : thread.id);
-          c.setEditor(null);
-        }}
-      >
-        {expanded ? <ChevronDown /> : <ChevronRight />}
-        {thread.resolved ? <CheckCircle2 aria-hidden="true" /> : <MessageSquare />}
-        <span className="thread-location">
-          {label(thread.anchor)}
-          {thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}
-        </span>
-        <span className="thread-summary-text">
-          {expanded
-            ? `${messages.length} ${messages.length === 1 ? "comment" : "comments"}`
-            : messages[0]?.body || "Deleted comment"}
-        </span>
-        {c.drafts.some((d) => d.threadId === thread.id) && (
-          <span className="draft-badge">Draft</span>
+      <div className="thread-header">
+        <button
+          className="thread-summary"
+          aria-expanded={expanded}
+          onClick={() => {
+            c.setActive(expanded ? null : thread.id);
+            c.setEditor(null);
+          }}
+        >
+          {expanded ? <ChevronDown /> : <ChevronRight />}
+          {thread.resolved ? <CheckCircle2 aria-hidden="true" /> : <MessageSquare />}
+          <span
+            className="thread-location"
+            title={`${label(thread.anchor)}${thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}`}
+          >
+            {label(thread.anchor)}
+            {thread.resolved ? ` · Resolved by ${authorName(thread.resolvedBy)}` : ""}
+          </span>
+          <span className="thread-summary-text">
+            {expanded
+              ? `${messages.length} ${messages.length === 1 ? "comment" : "comments"}`
+              : messages[0]?.body || "Deleted comment"}
+          </span>
+          {c.drafts.some((d) => d.threadId === thread.id) && (
+            <span className="draft-badge">Draft</span>
+          )}
+        </button>
+        {expanded && (
+          <>
+            <button
+              className="control thread-resolve"
+              onClick={() => c.resolve(thread)}
+              aria-label={thread.resolved ? "Reopen thread" : "Resolve thread"}
+              title={thread.resolved ? "Reopen thread" : "Resolve thread"}
+            >
+              {thread.resolved ? <RotateCcw /> : <CheckCircle2 />}
+              <span>{thread.resolved ? "Reopen" : "Resolve"}</span>
+            </button>
+            <CopyButton text={exportThread(thread)} label="Copy thread" iconOnly />
+          </>
         )}
-      </button>
+      </div>
       {expanded && (
         <div className="thread-content">
-          <div className="thread-tools">
-            <button className="control" onClick={() => c.resolve(thread)}>
-              {thread.resolved ? "Reopen thread" : "Resolve thread"}
-            </button>
-            <CopyButton text={exportThread(thread)} label="Copy thread" />
-          </div>
           {previous && (
             <>
               <div className="previous-note">Previous diff · original code</div>
@@ -109,7 +123,7 @@ export function ThreadView({ thread, previous = false }: { thread: Thread; previ
           </div>
           {draft ? (
             <div className="inline-composer">
-              <Composer key={draft.id} draft={draft} />
+              <Composer key={draft.id} draft={draft} inline />
             </div>
           ) : (
             <button className="thread-reply" onClick={() => c.begin(thread.anchor, thread.id)}>
@@ -151,7 +165,7 @@ export function LineThreads({
       ))}
       {draft && (
         <div className="inline-composer">
-          <Composer key={draft.id} draft={draft} />
+          <Composer key={draft.id} draft={draft} inline />
         </div>
       )}
     </div>
