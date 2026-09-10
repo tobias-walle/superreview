@@ -152,22 +152,11 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     if (!canAdjustDraft(draft, anchor)) return null;
     return rangeOrigins.current.get(draft.id) || draft.anchor;
   }
-  function selectLine(anchor: Anchor, extend: boolean, plus: boolean) {
+  function selectLine(anchor: Anchor, extend: boolean) {
     const draft = state.current.drafts.find((d) => d.id === editor);
     const base = selectionBase(anchor);
     if (extend && draft) {
       if (base) adjustDraft(range(base, anchor.start));
-      return;
-    }
-    if (
-      plus &&
-      canAdjustDraft(draft, anchor) &&
-      comparePoints(anchor.start, draft.anchor.start) >= 0 &&
-      comparePoints(anchor.end, draft.anchor.end) <= 0
-    ) {
-      document
-        .querySelector<HTMLTextAreaElement>(`[data-composer="${draft.id}"] textarea`)
-        ?.focus({ preventScroll: true });
       return;
     }
     begin(anchor);

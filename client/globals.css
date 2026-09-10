@@ -1579,29 +1579,6 @@ button {
   color: var(--mauve);
   outline: none;
 }
-.line-comment-add {
-  position: absolute;
-  left: 1px;
-  top: 2px;
-  width: 19px;
-  height: 19px;
-  border-radius: 4px;
-  background: var(--mauve);
-  color: var(--crust);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  opacity: 0;
-}
-.line-comment-add svg {
-  width: 14px;
-  height: 14px;
-}
-.code-cell:hover .line-comment-add,
-.line-comment-add:focus-visible {
-  opacity: 1;
-}
 .code-cell.comment-selected {
   background: color-mix(in srgb, var(--mauve) 16%, var(--background));
   box-shadow: inset 3px 0 var(--mauve);
@@ -2116,9 +2093,6 @@ button {
   .diff-canvas {
     margin-left: 10px;
     margin-right: 10px;
-  }
-  .line-comment-add {
-    display: none;
   }
   .inline-composer {
     display: none;

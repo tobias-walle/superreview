@@ -149,7 +149,6 @@ export function Cell({
       <span className="line-sign">
         {line?.kind === "add" ? "+" : line?.kind === "del" ? "−" : " "}
       </span>
-      {line && interactive && <Gutter line={line} side={actualSide} file={file} hunk={hunk} plus />}
       <code className="source">
         {line && (
           <Highlight

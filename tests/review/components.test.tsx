@@ -45,7 +45,8 @@ test("unified gutters only offer commenting on sides with an actual line", () =>
     </CommentContext.Provider>,
   );
   assert.match(html, /Select new line 2/);
-  assert.doesNotMatch(html, /Select old line|line undefined/);
+  assert.doesNotMatch(html, /Select old line|line undefined|line-comment-add/);
+  assert.equal((html.match(/<button/g) || []).length, 1);
 });
 
 test("document title identifies the project, branch, and comparison", () => {
