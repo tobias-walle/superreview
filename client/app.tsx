@@ -75,7 +75,6 @@ function Workspace() {
     innerWidth < MOBILE_BREAKPOINT_PX ? "unified" : "split",
   );
   const [wrap, setWrap] = useState(true);
-  const [words, setWords] = useState(true);
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(true);
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
@@ -158,12 +157,10 @@ function Workspace() {
               />
               <DiffToolbar
                 mode={mode}
-                wordHighlights={words}
                 wrapLines={wrap}
                 navigation={navigation}
                 onModeChange={setMode}
                 onOpenFiles={() => setFileDrawerOpen(true)}
-                onToggleWordHighlights={() => setWords((enabled) => !enabled)}
                 onToggleWrapLines={() => setWrap((enabled) => !enabled)}
                 onSelectFile={chooseFile}
               />
@@ -179,7 +176,7 @@ function Workspace() {
                 error={model.error}
                 mode={mode}
                 wrap={wrap}
-                words={words}
+                words
                 viewed={progress.viewed}
                 manual={progress.manual}
                 onToggle={progress.toggle}

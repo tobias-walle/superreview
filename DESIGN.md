@@ -6,7 +6,7 @@ A dense, calm workspace for reading code and giving precise feedback. The diff i
 
 - Use the shared semantic tokens in `client/globals.css`. Support Catppuccin Mocha and Latte together; avoid literal colors in components.
 - Use mauve for actions, focus and selection. Reserve green/red for added/deleted code. Pair color with signs, labels or icons.
-- Keep UI text compact and code monospaced. Preserve code alignment. Use subtle whole-line fills and stronger word highlights.
+- Keep UI text compact and code monospaced. Preserve code alignment. Use subtle whole-line fills and stronger word highlights. Word highlighting stays enabled without a toolbar toggle.
 - Prefer small spacing, consistent radii and quiet surfaces. Keep touch targets usable even when visible icons are small. Avoid decorative gradients and oversized headings.
 
 ## Layout and interaction

@@ -508,23 +508,6 @@ button {
   gap: 6px;
   align-items: center;
 }
-.word-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--subtext);
-  font-size: 12px;
-}
-.word-label svg {
-  width: 14px;
-  color: var(--mauve);
-}
-.word-diff-symbol {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 .toolbar .icon-button.active {
   color: var(--mauve);
   background: color-mix(in srgb, var(--mauve) 10%, transparent);
@@ -913,9 +896,6 @@ button {
   }
   .mode-tabs [data-slot="tabs-trigger"] {
     padding: 3px 7px;
-  }
-  .word-label {
-    display: none;
   }
   .diff-scroll {
     padding: 14px 10px 20px;

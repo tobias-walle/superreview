@@ -250,16 +250,15 @@ test("sequential navigation stops at both ends and handles empty and single-file
       const html = renderToStaticMarkup(
         <DiffToolbar
           mode="unified"
-          wordHighlights
           wrapLines
           navigation={navigation}
           onModeChange={() => {}}
           onOpenFiles={() => {}}
-          onToggleWordHighlights={() => {}}
           onToggleWrapLines={() => {}}
           onSelectFile={() => {}}
         />,
       );
+      assert.doesNotMatch(html, /Toggle word highlights|Word diff/);
       const buttons = html.match(/<button[^>]*>/g)!;
       const previous = buttons.find((button) => button.includes('aria-label="Previous file"'))!;
       const next = buttons.find((button) => button.includes('aria-label="Next file"'))!;

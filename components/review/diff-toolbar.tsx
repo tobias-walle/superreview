@@ -7,22 +7,18 @@ export type DiffMode = "unified" | "split";
 
 export function DiffToolbar({
   mode,
-  wordHighlights,
   wrapLines,
   navigation,
   onModeChange,
   onOpenFiles,
-  onToggleWordHighlights,
   onToggleWrapLines,
   onSelectFile,
 }: {
   mode: DiffMode;
-  wordHighlights: boolean;
   wrapLines: boolean;
   navigation: FileNavigation;
   onModeChange: (mode: DiffMode) => void;
   onOpenFiles: () => void;
-  onToggleWordHighlights: () => void;
   onToggleWrapLines: () => void;
   onSelectFile: (file: number) => void;
 }) {
@@ -48,16 +44,6 @@ export function DiffToolbar({
         </TabsList>
       </Tabs>
       <div className="toolbar-right">
-        <button
-          className={`icon-button ${wordHighlights ? "active" : ""}`}
-          onClick={onToggleWordHighlights}
-          aria-label="Toggle word highlights"
-          aria-pressed={wordHighlights}
-          title="Word highlights"
-        >
-          <span className="word-diff-symbol">ab</span>
-        </button>
-        <span className="word-label desktop-only">Word diff</span>
         <button
           className={`icon-button ${wrapLines ? "active" : ""}`}
           onClick={onToggleWrapLines}
