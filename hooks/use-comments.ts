@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { FileMeta, ReviewData } from "@/lib/diff/render";
 import {
   currentFile,
+  comparePoints,
+  range,
   LOCAL_HUMAN,
   uid,
   type Anchor,
@@ -9,6 +11,12 @@ import {
   type Thread,
 } from "@/lib/comments/model";
 import { useReviewSession } from "./use-review-session";
+import {
+  canAdjustDraft,
+  numberedRange,
+  selectionEvidence,
+  retargetDraft,
+} from "@/lib/comments/selection";
 
 const EMPTY_THREADS: Thread[] = [];
 const EMPTY_DRAFTS: Draft[] = [];
@@ -38,7 +46,7 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
   const [editor, setEditor] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [selection, setSelection] = useState<Anchor | null>(null);
-  const [rangeMode, setRangeMode] = useState(false);
+  const rangeOrigins = useRef(new Map<string, Anchor>());
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [undo, setUndo] = useState<null | (() => void)>(null);
@@ -59,12 +67,14 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     try {
       if (kind === "thread" && value)
         await runtime.execute({ type: "thread", thread: value as Thread });
-      else if (kind === "draft")
-        await runtime.saveDrafts(
-          value
-            ? [...state.current.drafts.filter((d) => d.id !== id), value as Draft]
-            : state.current.drafts.filter((d) => d.id !== id),
-        );
+      else if (kind === "draft") {
+        const drafts = value
+          ? [...state.current.drafts.filter((d) => d.id !== id), value as Draft]
+          : state.current.drafts.filter((d) => d.id !== id);
+        // Range and text changes can arrive before React commits the previous update.
+        state.current = { ...state.current, drafts };
+        await runtime.saveDrafts(drafts);
+      }
       setError("");
       return true;
     } catch (e: any) {
@@ -82,36 +92,23 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     }
     if (!threadId) {
       const snapshot = runtime.session!.snapshot;
-      const file = snapshot.data.files.find((f) => f.path === anchor.path);
-      const lines: string[] = [];
-      for (const hunk of file?.hunks || []) {
-        let line = anchor.side === "old" ? hunk.oldStart : hunk.newStart;
-        for (const text of hunk.lines) {
-          if (text.startsWith("\\") || text.startsWith(anchor.side === "old" ? "+" : "-")) continue;
-          if (line >= anchor.start.line && line <= anchor.end.line)
-            lines.push(`${line}: ${text.slice(1)}`);
-          line++;
-        }
-      }
-      anchor = {
-        ...anchor,
-        snapshotId: snapshot.id,
-        excerpt: lines.join("\n").slice(0, 20000) || anchor.excerpt,
-      };
+      anchor = selectionEvidence(snapshot.data, anchor, snapshot.id);
     }
     const id = messageId
       ? "edit-" + messageId
       : threadId
         ? "reply-" + threadId
-        : "new-" +
-          [
-            anchor.fingerprint,
-            anchor.side,
-            anchor.start.hunk,
-            anchor.start.source,
-            anchor.end.hunk,
-            anchor.end.source,
-          ].join("-");
+        : state.current.drafts.find(
+            (d) =>
+              !d.threadId &&
+              !d.messageId &&
+              (d.anchor.kind || "line") === (anchor.kind || "line") &&
+              d.anchor.path === anchor.path &&
+              d.anchor.fingerprint === anchor.fingerprint &&
+              d.anchor.side === anchor.side &&
+              comparePoints(d.anchor.start, anchor.start) === 0 &&
+              comparePoints(d.anchor.end, anchor.end) === 0,
+          )?.id || "new-" + uid();
     if (!state.current.drafts.some((d) => d.id === id))
       write(
         "draft",
@@ -129,7 +126,60 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     setEditor(id);
     setActive(threadId || null);
     setSelection(null);
-    setRangeMode(false);
+    if (!rangeOrigins.current.has(id)) rangeOrigins.current.set(id, anchor);
+    return id;
+  }
+  function adjustDraft(anchor: Anchor) {
+    const draft = state.current.drafts.find((d) => d.id === editor);
+    const snapshot = runtime.session!.snapshot;
+    const updated = retargetDraft(draft, anchor, snapshot.data, snapshot.id);
+    if (!updated) return;
+    write("draft", updated, updated.id);
+    setSelection(null);
+  }
+  function finishSelection(anchor: Anchor, extend = false, origin = anchor) {
+    const draft = state.current.drafts.find((d) => d.id === editor);
+    if (extend && draft) {
+      if (canAdjustDraft(draft, anchor)) adjustDraft(anchor);
+      else setSelection(null);
+      return;
+    }
+    const id = begin(anchor);
+    if (id) rangeOrigins.current.set(id, origin);
+  }
+  function selectionBase(anchor: Anchor) {
+    const draft = state.current.drafts.find((d) => d.id === editor);
+    if (!canAdjustDraft(draft, anchor)) return null;
+    return rangeOrigins.current.get(draft.id) || draft.anchor;
+  }
+  function selectLine(anchor: Anchor, extend: boolean, plus: boolean) {
+    const draft = state.current.drafts.find((d) => d.id === editor);
+    const base = selectionBase(anchor);
+    if (extend && draft) {
+      if (base) adjustDraft(range(base, anchor.start));
+      return;
+    }
+    if (
+      plus &&
+      canAdjustDraft(draft, anchor) &&
+      comparePoints(anchor.start, draft.anchor.start) >= 0 &&
+      comparePoints(anchor.end, draft.anchor.end) <= 0
+    ) {
+      document
+        .querySelector<HTMLTextAreaElement>(`[data-composer="${draft.id}"] textarea`)
+        ?.focus({ preventScroll: true });
+      return;
+    }
+    begin(anchor);
+  }
+  function setDraftRange(start: number, end: number) {
+    const draft = state.current.drafts.find((d) => d.id === editor);
+    if (!draft) return false;
+    const anchor = numberedRange(data, draft.anchor, start, end);
+    if (!anchor || !canAdjustDraft(draft, anchor)) return false;
+    adjustDraft(anchor);
+    rangeOrigins.current.set(draft.id, anchor);
+    return true;
   }
   const saving = useRef(new Set<string>());
   async function save(id: string) {
@@ -312,8 +362,10 @@ export function useCommentStore(data: ReviewData, meta: FileMeta[]) {
     setActive,
     selection,
     setSelection,
-    rangeMode,
-    setRangeMode,
+    selectLine,
+    selectionBase,
+    finishSelection,
+    setDraftRange,
     begin,
     save,
     remove,

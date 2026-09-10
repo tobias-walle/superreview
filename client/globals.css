@@ -1609,26 +1609,6 @@ button {
 .comment-selected .line-target {
   color: var(--mauve);
 }
-.line-selection-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  padding: 7px 28px;
-  background: color-mix(in srgb, var(--mauve) 8%, var(--mantle));
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.line-selection-bar > svg {
-  color: var(--mauve);
-}
-.line-selection-bar > span {
-  margin-right: auto;
-  white-space: nowrap;
-}
-.line-selection-bar .control {
-  font-size: 12px;
-}
 .comment-primary {
   display: inline-flex;
   align-items: center;
@@ -1921,6 +1901,48 @@ button {
   overflow-wrap: anywhere;
   margin: 2px 0 8px;
 }
+.composer-range-hint {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--overlay);
+}
+.composer-range-fields {
+  display: none;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.composer-range-fields label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.composer-range-fields input {
+  width: 7ch;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px;
+  background: var(--mantle);
+  color: var(--foreground);
+  font-size: 16px;
+}
+.composer-range-fields input:focus-visible {
+  outline: 2px solid var(--mauve);
+}
+.composer-range-fields [role="alert"] {
+  width: 100%;
+  color: var(--foreground);
+}
+.mobile-comment-composer .composer-range-fields {
+  display: flex;
+}
+.mobile-comment-composer .composer-range-hint {
+  display: none;
+}
 .comment-tabs {
   gap: 6px;
 }
@@ -2098,26 +2120,6 @@ button {
   .line-comment-add {
     display: none;
   }
-  .line-selection-bar {
-    padding: 8px 10px;
-    gap: 6px;
-    font-size: 12px;
-  }
-  .line-selection-bar > svg {
-    display: none;
-  }
-  .line-selection-bar .control {
-    padding: 0 7px;
-  }
-  .line-selection-bar .comment-primary {
-    padding: 5px 8px;
-  }
-  .line-selection-bar .icon-button {
-    width: 24px;
-  }
-  .line-selection-bar > span {
-    font-size: 11px;
-  }
   .inline-composer {
     display: none;
   }
@@ -2173,24 +2175,8 @@ button {
   position: sticky;
   left: 0;
 }
-/* Keep the code stationary while the selection action bar appears. */
 .review-area {
   position: relative;
-}
-.line-selection-bar {
-  position: absolute;
-  z-index: 10;
-  top: 163px;
-  left: 0;
-  right: 0;
-  min-height: 46px;
-  box-shadow: 0 4px 12px #0002;
-  background: var(--mantle);
-}
-@media (max-width: 767px) {
-  .line-selection-bar {
-    top: 166px;
-  }
 }
 
 /* Review lifecycle surfaces share the diff workspace's compact rhythm. */

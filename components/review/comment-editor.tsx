@@ -13,6 +13,57 @@ import {
 } from "@/components/ui/sheet";
 import { useComments } from "@/hooks/use-comments";
 import { label, type Draft } from "@/lib/comments/model";
+function DraftRange({ draft }: { draft: Draft }) {
+  const c = useComments();
+  const [start, setStart] = useState(String(draft.anchor.start.line));
+  const [end, setEnd] = useState(String(draft.anchor.end.line));
+  const [error, setError] = useState(false);
+  function apply() {
+    setError(!c.setDraftRange(Number(start), Number(end)));
+  }
+  return (
+    <div className="composer-range-fields">
+      <label>
+        Lines{" "}
+        <input
+          aria-label="Start line"
+          type="number"
+          min="1"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          onBlur={apply}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          }}
+        />
+      </label>
+      <label>
+        to{" "}
+        <input
+          aria-label="End line"
+          type="number"
+          min="1"
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+          onBlur={apply}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          }}
+        />
+      </label>
+      {error && (
+        <span role="alert">Choose an ordered range of visible {draft.anchor.side} lines.</span>
+      )}
+    </div>
+  );
+}
+
 export function Composer({ draft }: { draft: Draft }) {
   const c = useComments();
   const [tab, setTab] = useState("write");
@@ -39,6 +90,12 @@ export function Composer({ draft }: { draft: Draft }) {
       <div className="composer-path" title={draft.anchor.path}>
         {draft.anchor.path}
       </div>
+      {!draft.threadId && !draft.messageId && draft.anchor.kind !== "file" && (
+        <>
+          <span className="composer-range-hint">Shift-click a line to adjust range</span>
+          <DraftRange key={`${draft.anchor.start.line}-${draft.anchor.end.line}`} draft={draft} />
+        </>
+      )}
       <Tabs value={tab} onValueChange={setTab} className="comment-tabs">
         <TabsList aria-label="Comment editor mode">
           <TabsTrigger value="write">Write</TabsTrigger>

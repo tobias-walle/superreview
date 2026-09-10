@@ -1,10 +1,12 @@
-import { useRef } from "react";
-
-import { MessageSquare, Plus, X, TextSelect } from "lucide-react";
-
+import { useEffect, useRef } from "react";
+import { Plus } from "lucide-react";
 import { useComments } from "@/hooks/use-comments";
 import { contains, label, point, range, type Anchor, type Side } from "@/lib/comments/model";
 import type { DiffLine } from "@/lib/diff/render";
+
+// Ignore small mouse jitter so a click does not accidentally become a range drag.
+const DRAG_THRESHOLD_PX = 4;
+
 export function Gutter({
   line,
   side,
@@ -18,10 +20,12 @@ export function Gutter({
   hunk: number;
   plus?: boolean;
 }) {
-  const c = useComments(),
-    path = c.data.files[file].path;
-  const p = point(line, hunk, side),
-    moved = useRef(false);
+  const c = useComments();
+  const path = c.data.files[file].path;
+  const p = point(line, hunk, side);
+  const moved = useRef(false);
+  const cleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => cleanup.current?.(), []);
   const a: Anchor = {
     path,
     fingerprint: c.meta[file].fingerprint,
@@ -30,23 +34,17 @@ export function Gutter({
     end: p,
     excerpt: p.text,
   };
-  function select(extend: boolean) {
-    const base = c.selection;
-    const next =
-      extend && base?.path === path && base.side === side
-        ? range({ ...base, end: base.start }, p)
-        : a;
-    c.setSelection(next);
-    c.setEditor(null);
-    c.setActive(null);
-    if (c.rangeMode) c.setRangeMode(false);
-    return next;
-  }
+  const draft = c.drafts.find((d) => d.id === c.editor && !d.threadId && !d.messageId);
+  const selected = draft && contains(draft.anchor, path, hunk, line, side);
+  const title =
+    plus && selected
+      ? `Continue comment on ${label(draft.anchor)}`
+      : "Comment on line · Shift-click to adjust range";
   return (
     <button
       className={plus ? "line-comment-add" : "line-no line-target"}
       aria-label={plus ? `Comment on ${side} line ${p.line}` : `Select ${side} line ${p.line}`}
-      title={plus ? "Add comment" : "Select line · Shift-click to extend"}
+      title={title}
       data-gutter-file={file}
       data-gutter-hunk={hunk}
       data-gutter-source={p.source}
@@ -55,43 +53,52 @@ export function Gutter({
       onPointerDown={(e) => {
         moved.current = false;
         if (e.pointerType !== "mouse" || e.button !== 0) return;
-        const origin =
-          e.shiftKey && c.selection?.path === path && c.selection.side === side
-            ? { ...c.selection, end: c.selection.start }
-            : a;
+        cleanup.current?.();
+        const origin = (e.shiftKey && c.selectionBase(a)) || a;
+        const extend = e.shiftKey;
         const startX = e.clientX,
           startY = e.clientY;
+        let next: Anchor | null = null;
         const move = (event: PointerEvent) => {
-          if (Math.abs(event.clientY - startY) + Math.abs(event.clientX - startX) < 4) return;
+          if (
+            Math.abs(event.clientY - startY) + Math.abs(event.clientX - startX) <
+            DRAG_THRESHOLD_PX
+          )
+            return;
           const el = document
             .elementFromPoint(event.clientX, event.clientY)
             ?.closest<HTMLElement>("[data-gutter-source]");
           if (!el || +el.dataset.gutterFile! !== file || el.dataset.gutterSide !== side) return;
           moved.current = true;
-          c.setSelection(
-            range(origin, {
-              hunk: +el.dataset.gutterHunk!,
-              source: +el.dataset.gutterSource!,
-              line: +el.dataset.gutterLine!,
-              text: el.closest(".code-cell")?.querySelector(".source")?.textContent || "",
-            }),
-          );
-          c.setEditor(null);
-          c.setActive(null);
+          next = range(origin, {
+            hunk: +el.dataset.gutterHunk!,
+            source: +el.dataset.gutterSource!,
+            line: +el.dataset.gutterLine!,
+            text: el.closest(".code-cell")?.querySelector(".source")?.textContent || "",
+          });
+          c.setSelection(next);
         };
-        const up = () => {
+        const stop = () => {
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", up);
-          window.removeEventListener("pointercancel", up);
+          window.removeEventListener("pointercancel", cancel);
+          cleanup.current = null;
         };
+        const up = () => {
+          stop();
+          if (next) c.finishSelection(next, extend, origin);
+        };
+        const cancel = () => {
+          stop();
+          c.setSelection(null);
+        };
+        cleanup.current = stop;
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
-        window.addEventListener("pointercancel", up);
+        window.addEventListener("pointercancel", cancel);
       }}
       onClick={(e) => {
-        if (moved.current) return;
-        const next = select(e.shiftKey || c.rangeMode);
-        if (plus && !e.shiftKey) c.begin(next);
+        if (!moved.current) c.selectLine(a, e.shiftKey, plus);
       }}
     >
       {plus ? <Plus /> : p.line}
@@ -108,38 +115,7 @@ export function lineSelected(
 ) {
   const selected =
     c.selection ||
-    c.threads.find((t) => t.id === c.active)?.anchor ||
-    c.drafts.find((d) => d.id === c.editor)?.anchor;
+    c.drafts.find((d) => d.id === c.editor)?.anchor ||
+    c.threads.find((t) => t.id === c.active)?.anchor;
   return !!line && !!selected && contains(selected, c.data.files[file].path, hunk, line, side);
-}
-
-export function SelectionBar() {
-  const c = useComments();
-  if (!c.selection) return null;
-  return (
-    <div className="line-selection-bar" role="region" aria-label="Selected lines">
-      <TextSelect />
-      <span>{label(c.selection)}</span>
-      <button className="comment-primary" onClick={() => c.begin(c.selection!)}>
-        <MessageSquare />
-        Comment
-      </button>
-      <button
-        className={`control ${c.rangeMode ? "active" : ""}`}
-        onClick={() => c.setRangeMode(!c.rangeMode)}
-      >
-        {c.rangeMode ? "Tap the last line" : "Select range"}
-      </button>
-      <button
-        className="icon-button"
-        aria-label="Clear selection"
-        onClick={() => {
-          c.setSelection(null);
-          c.setRangeMode(false);
-        }}
-      >
-        <X />
-      </button>
-    </div>
-  );
 }

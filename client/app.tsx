@@ -3,7 +3,7 @@ import { GitCompareArrows } from "lucide-react";
 
 import { ChangedFilesSidebar } from "@/components/review/changed-files-sidebar";
 import { CommentsPanel } from "@/components/review/comments-panel";
-import { CommentFeedback, SelectionBar } from "@/components/review/comments";
+import { CommentFeedback } from "@/components/review/comments";
 import { ContinuousDiff, type DiffHandle } from "@/components/review/continuous-diff";
 import { DiffToolbar, type DiffMode } from "@/components/review/diff-toolbar";
 import { ReviewControls } from "@/components/review/review-controls";
@@ -164,7 +164,6 @@ function Workspace() {
                 onSelectFile={chooseFile}
               />
               <ReviewControls />
-              <SelectionBar />
               <ContinuousDiff
                 preparationMs={model.preparationMs}
                 ref={diffRef}

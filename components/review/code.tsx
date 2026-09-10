@@ -126,7 +126,7 @@ export function Cell({
   const lineNumber = (targetSide: "old" | "new") =>
     targetSide === "old" ? line?.oldNo : line?.newNo;
   const gutter = (targetSide: "old" | "new") =>
-    line && interactive ? (
+    line && interactive && lineNumber(targetSide) !== undefined ? (
       <Gutter line={line} side={targetSide} file={file} hunk={hunk} />
     ) : (
       <span className="line-no">{lineNumber(targetSide)}</span>

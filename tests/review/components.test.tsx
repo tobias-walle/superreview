@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { reviewDocumentTitle } from "../../client/document-title";
 import { Markdown } from "../../components/review/markdown";
 import { CopyButton } from "../../components/review/copy-button";
-import { Highlight } from "../../components/review/code";
+import { Cell, Highlight } from "../../components/review/code";
 import { ThreadView } from "../../components/review/comment-thread";
 import { buildFileTreeEntries } from "../../components/review/file-tree";
 import { resizeSidebarWidth } from "../../components/review/sidebar-resizer";
@@ -16,6 +16,37 @@ import type { ReviewIdentity, Submission } from "../../lib/review/types";
 import type { Thread } from "../../lib/comments/model";
 import { hiddenContextBefore, type Hunk } from "../../lib/diff/render";
 import { highlightHunk, languageForPath } from "../../lib/syntax/highlight";
+
+test("unified gutters only offer commenting on sides with an actual line", () => {
+  const comments = {
+    data: { files: [{ path: "example.ts" }] },
+    meta: [{ fingerprint: "content" }],
+    drafts: [],
+    threads: [],
+    selection: null,
+    editor: null,
+  } as unknown as Comments;
+  const html = renderToStaticMarkup(
+    <CommentContext.Provider value={comments}>
+      <Cell
+        file={0}
+        hunk={0}
+        side="new"
+        unified
+        words={false}
+        line={{
+          kind: "add",
+          newNo: 2,
+          sourceIndex: 1,
+          text: "added",
+          parts: [{ text: "added", changed: false }],
+        }}
+      />
+    </CommentContext.Provider>,
+  );
+  assert.match(html, /Select new line 2/);
+  assert.doesNotMatch(html, /Select old line|line undefined/);
+});
 
 test("document title identifies the project, branch, and comparison", () => {
   assert.equal(

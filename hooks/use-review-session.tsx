@@ -114,7 +114,8 @@ function useSession() {
     return enqueue(async () => {
       const latest = current.current!;
       const revision = await client.current!.saveDrafts(drafts, latest.draftRevision);
-      const saved = { ...latest, draftRevision: revision };
+      // A newer text/range edit may have been staged while this request was in flight.
+      const saved = { ...current.current!, draftRevision: revision };
       current.current = saved;
       setSession(saved);
     });

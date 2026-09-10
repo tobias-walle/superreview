@@ -4,6 +4,7 @@ await build({
   entryPoints: [
     "tests/review/review.test.ts",
     "tests/review/components.test.tsx",
+    "tests/review/selection.test.ts",
     "tests/review/skill.test.ts",
   ],
   outdir: "tests/.build",
@@ -21,6 +22,7 @@ execFileSync(
     "--test",
     "tests/.build/review.test.mjs",
     "tests/.build/components.test.mjs",
+    "tests/.build/selection.test.mjs",
     "tests/.build/skill.test.mjs",
   ],
   {
