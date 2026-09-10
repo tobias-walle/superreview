@@ -376,7 +376,9 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       items.push({ key: `${fi}:header`, kind: "header", file: fi });
       if (collapsed.has(fi)) return;
       if (files[fi].binary) items.push({ key: `${fi}:binary`, kind: "binary", file: fi });
-      file.hunks.forEach((h, hi) => {
+      // Include a final divider so the captured file's tail can be revealed lazily.
+      [...file.hunks, undefined].forEach((h, hi) => {
+        if (!file.hunks.length) return;
         const hidden = hiddenContextBefore(files[fi].hunks, hi);
         if (hidden) {
           const gapKey = `${fi}:${hi}`;
@@ -388,7 +390,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
             : files[fi].sourceObjects?.old || fallback.before.object;
           const content = object ? sourceContents.get(object) : undefined;
           items.push({
-            key: `${gapKey}:gap`,
+            key: `${gapKey}:hunk`,
             kind: "gap",
             file: fi,
             hunk: hi,
@@ -403,6 +405,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
           });
           if (expanded && typeof content === "string") {
             const sourceLines = content.split("\n");
+            if (sourceLines.at(-1) === "") sourceLines.pop();
             const start = useNew ? hidden.newStart : hidden.oldStart;
             const displayHunk: Hunk = {
               header: "",
@@ -438,12 +441,14 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
             }
           }
         }
-        items.push({
-          key: `${fi}:${hi}:hunk`,
-          kind: "hunk",
-          file: fi,
-          hunk: hi,
-        });
+        if (!h) return;
+        if (!hidden)
+          items.push({
+            key: `${fi}:${hi}:hunk`,
+            kind: "hunk",
+            file: fi,
+            hunk: hi,
+          });
         const blocks = mode === "split" ? h.split : h.unified;
         blocks.forEach((block, bi) =>
           items.push({
@@ -738,18 +743,36 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                   </div>
                 ) : item.kind === "gap" ? (
                   <button
-                    className="hunk-gap stream-hunk"
+                    className="hunk-label hunk-gap stream-hunk"
                     type="button"
+                    title={
+                      expandedGaps.has(`${item.file}:${item.hunk}`)
+                        ? "Hide unchanged context"
+                        : "Show unchanged context"
+                    }
+                    aria-label={`${expandedGaps.has(`${item.file}:${item.hunk}`) ? "Hide" : "Show"} ${Number.isFinite(item.gapCount) ? `${item.gapCount} hidden lines` : "end of file"}`}
                     aria-expanded={expandedGaps.has(`${item.file}:${item.hunk}`)}
                     onClick={() => toggleGap(item.file, item.hunk!)}
                   >
-                    <Plus />
                     <span>
+                      {meta[item.file].hunks[item.hunk!]?.header
+                        .split("@@")
+                        .slice(0, 2)
+                        .join("@@") || "@@"}
+                      {meta[item.file].hunks[item.hunk!] ? "@@" : " End of file"}
+                    </span>
+                    <span className="hunk-context-heading">
+                      {meta[item.file].hunks[item.hunk!]?.header.split("@@")[2]}
+                    </span>
+                    <span className="hunk-context-action">
                       {item.gapState === "loading"
-                        ? "Loading hidden lines…"
+                        ? "Loading…"
                         : item.gapState === "error"
-                          ? "Could not load hidden lines. Click to retry."
-                          : `${expandedGaps.has(`${item.file}:${item.hunk}`) ? "Hide" : "Show"} ${item.gapCount} hidden ${item.gapCount === 1 ? "line" : "lines"}`}
+                          ? "Retry"
+                          : expandedGaps.has(`${item.file}:${item.hunk}`)
+                            ? "Hide context"
+                            : ""}
+                      <Plus />
                     </span>
                   </button>
                 ) : item.kind === "hunk" ? (

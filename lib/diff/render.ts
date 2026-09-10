@@ -20,7 +20,11 @@ export type HiddenContext = {
   count: number;
 };
 export function hiddenContextBefore(hunks: Hunk[], index: number): HiddenContext | undefined {
-  if (index <= 0 || index >= hunks.length) return undefined;
+  if (index < 0 || index > hunks.length || !hunks.length) return undefined;
+  if (index === 0) {
+    const count = Math.min(hunks[0].oldStart, hunks[0].newStart) - 1;
+    return count > 0 ? { oldStart: 1, newStart: 1, count } : undefined;
+  }
   const previous = hunks[index - 1];
   let oldStart = previous.oldStart;
   let newStart = previous.newStart;
@@ -29,6 +33,8 @@ export function hiddenContextBefore(hunks: Hunk[], index: number): HiddenContext
     if (!line.startsWith("+")) oldStart++;
     if (!line.startsWith("-")) newStart++;
   }
+  // The trailing range is bounded by the captured source once it is loaded.
+  if (index === hunks.length) return { oldStart, newStart, count: Infinity };
   const oldCount = hunks[index].oldStart - oldStart;
   const newCount = hunks[index].newStart - newStart;
   if (oldCount <= 0 || oldCount !== newCount) return undefined;

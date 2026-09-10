@@ -129,6 +129,17 @@ test("hidden context is measured between adjacent hunks", () => {
     count: 6,
   });
   assert.equal(hiddenContextBefore(hunks, 0), undefined);
+  assert.deepEqual(hiddenContextBefore([{ ...hunks[0], oldStart: 8, newStart: 8 }], 0), {
+    oldStart: 1,
+    newStart: 1,
+    count: 7,
+  });
+  assert.deepEqual(hiddenContextBefore(hunks, hunks.length), {
+    oldStart: 11,
+    newStart: 11,
+    count: Infinity,
+  });
+  assert.equal(hiddenContextBefore([], 0), undefined);
   assert.equal(
     hiddenContextBefore([hunks[0], { ...hunks[1], newStart: 11 }], 1),
     undefined,

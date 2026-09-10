@@ -625,17 +625,7 @@ button {
 }
 .hunk-gap {
   width: 100%;
-  height: 31px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 15px;
   border-top: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 5%, var(--background));
-  font-family: var(--font-mono);
-  font-size: 11px;
   text-align: left;
   cursor: pointer;
 }
@@ -648,9 +638,25 @@ button {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
+.hunk-context-heading {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.hunk-context-action {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--subtext);
+  font-size: 10px;
+}
 .hunk-gap svg {
   width: 13px;
   height: 13px;
+  flex-shrink: 0;
 }
 .hunk-gap[aria-expanded="true"] svg {
   transform: rotate(45deg);
