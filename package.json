@@ -65,7 +65,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
-    "conventional-changelog-conventionalcommits": "10.4.0",
+    "conventional-changelog-conventionalcommits": "9.3.1",
     "esbuild": "^0.28.0",
     "oxfmt": "0.66.0",
     "oxlint": "1.81.0",
