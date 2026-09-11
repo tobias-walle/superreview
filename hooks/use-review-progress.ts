@@ -5,18 +5,18 @@ import { useReviewSession } from "./use-review-session";
 export type Decisions = Record<string, { viewed: boolean; manual: boolean }>;
 export function useReviewProgress(data: ReviewData, meta: FileMeta[]) {
   const runtime = useReviewSession();
+  const snapshot = runtime.session!.snapshot;
   const seen = useRef(new Map<number, Set<string>>());
   const completed = useRef(new Set<number>());
   useEffect(() => {
     seen.current.clear();
     completed.current.clear();
-  }, [meta]);
+  }, [snapshot.id]);
   const totals = useMemo(
     () => meta.map((m) => m.hunks.reduce((n, h) => n + h.sourceCount, 0)),
     [meta],
   );
   const records = runtime.session!.state.checkpoints;
-  const snapshot = runtime.session!.snapshot;
   const matching = meta.map((m, i) => {
     const cp = records[data.files[i].path],
       evidence = snapshot.evidence[data.files[i].path];
@@ -49,6 +49,18 @@ export function useReviewProgress(data: ReviewData, meta: FileMeta[]) {
     },
     [runtime, meta, data.files],
   );
+  const markTraversed = useCallback(
+    (file: number) => {
+      if (completed.current.has(file) || !totals[file]) return;
+      const cp = runtime.session!.state.checkpoints[data.files[file].path];
+      const evidence = runtime.session!.snapshot.evidence[data.files[file].path];
+      if (!canMarkAutomatically(cp, evidence, meta[file].fingerprint)) return;
+      completed.current.add(file);
+      seen.current.delete(file);
+      persist(file, true, false);
+    },
+    [runtime, data.files, meta, totals, persist],
+  );
   const markSeen = useCallback(
     (file: number, hunk: number, indices: number[]) => {
       if (completed.current.has(file) || !totals[file]) return;
@@ -78,5 +90,6 @@ export function useReviewProgress(data: ReviewData, meta: FileMeta[]) {
       persist(file, false, false);
     },
     markSeen,
+    markTraversed,
   };
 }

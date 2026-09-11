@@ -51,6 +51,8 @@ const MOBILE_VIEWPORT_MAX_WIDTH_PX = 767;
 const HUNK_HEADER_HEIGHT_PX = 31;
 const DESKTOP_FILE_HEADER_GAP_PX = 18;
 const MOBILE_FILE_HEADER_GAP_PX = 14;
+const DESKTOP_FILE_HEADER_HEIGHT_PX = 46;
+const MOBILE_FILE_HEADER_HEIGHT_PX = 44;
 type Props = {
   preparationMs: number;
   fileOrder: readonly number[];
@@ -73,6 +75,7 @@ type Props = {
   onToggle: (file: number, value: boolean) => void;
   onResume: (file: number) => void;
   markSeen: (file: number, hunk: number, rows: number[]) => void;
+  markTraversed: (file: number) => void;
 };
 const CodeBlock = memo(function CodeBlock({
   rows,
@@ -310,6 +313,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     onResume,
     onActive,
     markSeen,
+    markTraversed,
     getBlock,
     request,
     version,
@@ -327,6 +331,11 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const anchor = useRef<Item | undefined>(undefined);
   const previousLayout = useRef("");
   const navigationTarget = useRef<number | undefined>(undefined);
+  const navigationStartsAtFile = useRef(false);
+  const activeTraversal = useRef<{ file: number; fromStart: boolean; scroll: number } | undefined>(
+    undefined,
+  );
+  const traversedFiles = useRef(new Set<number>());
   const toggleCollapsed = useCallback((file: number) => {
     setCollapsed((old) => {
       const next = new Set(old);
@@ -535,13 +544,15 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const visible = virtual.getVirtualItems();
   const scrollTop = root.current?.scrollTop || 0;
   const topVirtualItem = visible.find((item) => item.end > scrollTop + 2);
+  const mobileViewport =
+    typeof window !== "undefined" && window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH_PX;
+  const headerGap = mobileViewport ? MOBILE_FILE_HEADER_GAP_PX : DESKTOP_FILE_HEADER_GAP_PX;
+  const headerHeight = mobileViewport
+    ? MOBILE_FILE_HEADER_HEIGHT_PX
+    : DESKTOP_FILE_HEADER_HEIGHT_PX;
   let stickyFileIndex: number | undefined;
   if (topVirtualItem) {
     const topItem = items[topVirtualItem.index];
-    const headerGap =
-      typeof window !== "undefined" && window.innerWidth <= MOBILE_VIEWPORT_MAX_WIDTH_PX
-        ? MOBILE_FILE_HEADER_GAP_PX
-        : DESKTOP_FILE_HEADER_GAP_PX;
     if (topItem.kind !== "header" || scrollTop >= topVirtualItem.start + headerGap) {
       stickyFileIndex = topItem.file;
     } else if (topVirtualItem.index > 0) {
@@ -549,6 +560,21 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     }
   }
   const stickyFile = stickyFileIndex === undefined ? undefined : files[stickyFileIndex];
+  const incomingHeader = visible.find(
+    (item) =>
+      items[item.index]?.kind === "header" &&
+      items[item.index].file !== stickyFileIndex &&
+      item.start + headerGap > scrollTop,
+  );
+  const stickyHeaderOffset = incomingHeader
+    ? Math.min(0, incomingHeader.start + headerGap - scrollTop - headerHeight)
+    : 0;
+  const layout = `${mode}:${hideDeletions}:${wrap}:${Math.round(width)}`;
+  const collapsedKey = [...collapsed].sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    activeTraversal.current = undefined;
+    traversedFiles.current.clear();
+  }, [layout, collapsedKey, files]);
   const keys = visible
     .filter((v) => items[v.index]?.kind === "block")
     .map((v) => items[v.index].key)
@@ -559,6 +585,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   useEffect(() => {
     // The offset can change while the virtual item range stays identical.
     const scroll = scrollTop;
+    const viewportHeight = root.current?.clientHeight || 0;
     const first = visible.find((v) => v.end > scroll + 2);
     if (first && items[first.index]) {
       anchor.current = items[first.index];
@@ -579,19 +606,55 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         }
       // At a scroll boundary, a short final/first file may occupy less area than its neighbor.
       // Keep the counter and navigation aligned with the actual end, not the largest visible file.
-      const boundary = scrollBoundary(
-        scroll,
-        root.current?.clientHeight || 0,
-        root.current?.scrollHeight || 0,
-      );
+      const boundary = scrollBoundary(scroll, viewportHeight, root.current?.scrollHeight || 0);
       if (boundary === "start") active = items[0].file;
       if (boundary === "end") active = items[items.length - 1].file;
       if (navigationTarget.current !== undefined && (areas.get(navigationTarget.current) || 0) > 0)
         active = navigationTarget.current;
+      if (!hideDeletions) {
+        const previous = activeTraversal.current;
+        if (!previous) {
+          activeTraversal.current = { file: active, fromStart: boundary === "start", scroll };
+        } else if (previous.file === active) {
+          previous.scroll = scroll;
+        } else {
+          const movingDown = scroll > previous.scroll;
+          const previousPosition = fileOrder.indexOf(previous.file);
+          const activePosition = fileOrder.indexOf(active);
+          const navigated = navigationTarget.current === active;
+          if (
+            movingDown &&
+            previous.fromStart &&
+            !collapsed.has(previous.file) &&
+            !navigated &&
+            !traversedFiles.current.has(previous.file)
+          ) {
+            traversedFiles.current.add(previous.file);
+            markTraversed(previous.file);
+          }
+          activeTraversal.current = {
+            file: active,
+            fromStart:
+              boundary === "start" ||
+              (navigated && navigationStartsAtFile.current) ||
+              (movingDown && activePosition === previousPosition + 1),
+            scroll,
+          };
+        }
+        const traversal = activeTraversal.current;
+        if (
+          boundary === "end" &&
+          traversal?.fromStart &&
+          !collapsed.has(traversal.file) &&
+          !traversedFiles.current.has(traversal.file)
+        ) {
+          traversedFiles.current.add(traversal.file);
+          markTraversed(traversal.file);
+        }
+      }
       onActive(active);
     }
-  }, [visible, items, onActive, scrollTop]);
-  const layout = `${mode}:${hideDeletions}:${wrap}:${Math.round(width)}`;
+  }, [visible, items, onActive, scrollTop, hideDeletions, fileOrder, markTraversed, collapsed]);
   useLayoutEffect(() => {
     if (previousLayout.current && previousLayout.current !== layout) {
       const old = anchor.current;
@@ -621,6 +684,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         const file = files.findIndex((candidate) => candidate.fingerprint === a.fingerprint);
         if (file < 0) return;
         navigationTarget.current = file;
+        navigationStartsAtFile.current = a.kind === "file";
         setCollapsed((old) => {
           const n = new Set(old);
           n.delete(file);
@@ -634,6 +698,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       },
       scrollToFile(index) {
         navigationTarget.current = index;
+        navigationStartsAtFile.current = true;
         if (starts[index] === undefined) return;
         setCollapsed((old) => {
           if (!old.has(index)) return old;
@@ -726,7 +791,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
           }
         >
           {stickyFile && stickyFileIndex !== undefined && (
-            <div className="sticky-file-context">
+            <div
+              className="sticky-file-context"
+              style={{ transform: `translateY(${stickyHeaderOffset}px)` }}
+            >
               <FileHeader
                 className="sticky-file-header"
                 fileIndex={stickyFileIndex}

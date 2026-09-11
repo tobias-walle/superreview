@@ -26,6 +26,7 @@ export function FileTree({
   viewed,
   onToggle,
   readyFiles,
+  unseenOnly,
 }: {
   files: ReviewFile[];
   selected: number;
@@ -33,6 +34,7 @@ export function FileTree({
   viewed: boolean[];
   onToggle: (n: number, value: boolean) => void;
   readyFiles: number;
+  unseenOnly: boolean;
 }) {
   const comments = useComments();
   const root = useRef<HTMLDivElement>(null);
@@ -42,8 +44,9 @@ export function FileTree({
       buildFileTreeEntries(
         files.map((file) => file.path),
         closed,
+        (file) => !unseenOnly || !viewed[file],
       ),
-    [files, closed],
+    [files, closed, unseenOnly, viewed],
   );
   // TanStack Virtual exposes callbacks React Compiler cannot memoize safely.
   // oxlint-disable-next-line react/incompatible-library
@@ -68,95 +71,121 @@ export function FileTree({
   }, [selected, entries, virtual]);
   return (
     <div className="tree virtual-tree" ref={root} aria-label="Changed file tree">
-      <SidebarMenu
-        style={{
-          height: virtual.getTotalSize(),
-          position: "relative",
-          display: "block",
-        }}
-      >
-        {virtual.getVirtualItems().map((item) => {
-          const e = entries[item.index];
-          return (
-            <SidebarMenuItem
-              key={e.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: TREE_ROW_HEIGHT_PX,
-                transform: `translateY(${item.start}px)`,
-              }}
-            >
-              {e.kind === "folder" ? (
-                <button
-                  className="folder-button"
-                  style={treeIndent(e.depth)}
-                  aria-expanded={!closed.has(e.path)}
-                  title={e.path}
-                  onClick={() =>
-                    setClosed((old) => {
-                      const next = new Set(old);
-                      if (next.has(e.path)) next.delete(e.path);
-                      else next.add(e.path);
-                      return next;
-                    })
-                  }
-                >
-                  {closed.has(e.path) ? <ChevronRight /> : <ChevronDown />}
-                  <Folder />
-                  <span className="tree-entry-label">{e.label}</span>
-                  <span className="folder-count">{e.count}</span>
-                </button>
-              ) : (
-                <>
-                  <SidebarMenuButton
-                    className={`tree-file ${viewed[e.file] ? "is-viewed" : ""}`}
-                    isActive={selected === e.file}
-                    aria-current={selected === e.file ? "true" : undefined}
-                    style={treeIndent(e.depth)}
-                    onClick={() => onSelect(e.file)}
-                    title={files[e.file].path}
-                  >
-                    <FileIcon path={e.key} />
-                    <span className="tree-entry-label">{e.key.split("/").at(-1)}</span>
-                    {files[e.file].changedSinceReview && !viewed[e.file] && (
-                      <span
-                        className="changed-indicator"
-                        title="Changed since review"
-                        aria-label="Changed since review"
-                      >
-                        •
+      {entries.length === 0 ? (
+        <div className="tree-empty">All files viewed</div>
+      ) : (
+        <SidebarMenu
+          style={{
+            height: virtual.getTotalSize(),
+            position: "relative",
+            display: "block",
+          }}
+        >
+          {virtual.getVirtualItems().map((item) => {
+            const e = entries[item.index];
+            return (
+              <SidebarMenuItem
+                key={e.key}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: TREE_ROW_HEIGHT_PX,
+                  transform: `translateY(${item.start}px)`,
+                }}
+              >
+                {e.kind === "folder" ? (
+                  <>
+                    <button
+                      className="folder-button"
+                      style={treeIndent(e.depth)}
+                      aria-expanded={!closed.has(e.path)}
+                      title={e.path}
+                      onClick={() =>
+                        setClosed((old) => {
+                          const next = new Set(old);
+                          if (next.has(e.path)) next.delete(e.path);
+                          else next.add(e.path);
+                          return next;
+                        })
+                      }
+                    >
+                      {closed.has(e.path) ? <ChevronRight /> : <ChevronDown />}
+                      <Folder />
+                      <span className="tree-entry-label">{e.label}</span>
+                      <span className="folder-count">{e.count}</span>
+                    </button>
+                    <Checkbox
+                      className="tree-viewed tree-folder-viewed"
+                      checked={
+                        e.files.every((file) => viewed[file])
+                          ? true
+                          : e.files.some((file) => viewed[file])
+                            ? "indeterminate"
+                            : false
+                      }
+                      disabled={e.files.some((file) => file >= readyFiles)}
+                      onCheckedChange={(value) =>
+                        e.files.forEach((file) => onToggle(file, value === true))
+                      }
+                      aria-label={`Viewed folder ${e.path}`}
+                      title={
+                        e.files.every((file) => viewed[file])
+                          ? "Mark folder unviewed"
+                          : "Mark folder viewed"
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <SidebarMenuButton
+                      className={`tree-file ${viewed[e.file] ? "is-viewed" : ""}`}
+                      isActive={selected === e.file}
+                      aria-current={selected === e.file ? "true" : undefined}
+                      style={treeIndent(e.depth)}
+                      onClick={() => onSelect(e.file)}
+                      title={files[e.file].path}
+                    >
+                      <FileIcon path={e.key} />
+                      <span className="tree-entry-label">{e.key.split("/").at(-1)}</span>
+                      {files[e.file].changedSinceReview && !viewed[e.file] && (
+                        <span
+                          className="changed-indicator"
+                          title="Changed since review"
+                          aria-label="Changed since review"
+                        >
+                          •
+                        </span>
+                      )}
+                      {comments.counts.get(e.key) ? (
+                        <span
+                          className="tree-comment-count"
+                          title={`${comments.counts.get(e.key)} comment threads`}
+                        >
+                          <MessageSquare />
+                          {comments.counts.get(e.key)}
+                        </span>
+                      ) : null}
+                      <span className={`file-status ${files[e.file].status}`}>
+                        {files[e.file].status}
                       </span>
-                    )}
-                    {comments.counts.get(e.key) ? (
-                      <span
-                        className="tree-comment-count"
-                        title={`${comments.counts.get(e.key)} comment threads`}
-                      >
-                        <MessageSquare />
-                        {comments.counts.get(e.key)}
-                      </span>
-                    ) : null}
-                    <span className={`file-status ${files[e.file].status}`}>
-                      {files[e.file].status}
-                    </span>
-                  </SidebarMenuButton>
-                  <Checkbox
-                    className="tree-viewed"
-                    checked={!!viewed[e.file]}
-                    disabled={e.file >= readyFiles}
-                    onCheckedChange={(value) => onToggle(e.file, value === true)}
-                    aria-label={`Viewed ${files[e.file].path}`}
-                    title={viewed[e.file] ? "Mark unviewed" : "Mark viewed"}
-                  />
-                </>
-              )}
-            </SidebarMenuItem>
-          );
-        })}
-      </SidebarMenu>
+                    </SidebarMenuButton>
+                    <Checkbox
+                      className="tree-viewed"
+                      checked={!!viewed[e.file]}
+                      disabled={e.file >= readyFiles}
+                      onCheckedChange={(value) => onToggle(e.file, value === true)}
+                      aria-label={`Viewed ${files[e.file].path}`}
+                      title={viewed[e.file] ? "Mark unviewed" : "Mark viewed"}
+                    />
+                  </>
+                )}
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      )}
     </div>
   );
 }

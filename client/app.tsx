@@ -188,6 +188,7 @@ function Workspace() {
                 onToggle={progress.toggle}
                 onResume={progress.resume}
                 markSeen={progress.markSeen}
+                markTraversed={progress.markTraversed}
                 onActive={syncActiveFile}
                 getBlock={model.getBlock}
                 request={model.request}

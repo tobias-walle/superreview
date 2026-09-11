@@ -1,32 +1,34 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { addCoverage, coverageComplete } from "@/lib/diff/viewed.mjs";
-/** Overscan is not visibility. Sample only real code rows after a short dwell.
+/** Overscan is not visibility. Sample only code rows intersecting the real viewport.
  * Partial coverage handles wrapped rows taller than the viewport. */
 export function useLineVisibility(
   root: RefObject<HTMLDivElement | null>,
   markSeen: (file: number, hunk: number, rows: number[]) => void,
   layoutKey: string,
 ) {
+  const markSeenRef = useRef(markSeen);
   useEffect(() => {
-    const candidates = new Map<string, { since: number; start: number; end: number }>();
+    markSeenRef.current = markSeen;
+  }, [markSeen]);
+  useEffect(() => {
     const coverage = new Map<string, number[][]>();
     const complete = new Set<string>();
     const sample = () => {
       const viewport = root.current;
-      if (!viewport || document.visibilityState !== "visible") {
-        candidates.clear();
-        return;
-      }
+      if (!viewport || document.visibilityState !== "visible") return;
       const view = viewport.getBoundingClientRect();
       if (!view.height || !view.width) return;
+      const stickyHeader = viewport.querySelector<HTMLElement>(".sticky-file-header");
+      const visibleTop = Math.max(
+        view.top,
+        stickyHeader?.getBoundingClientRect().bottom || view.top,
+      );
       const topElement = document.elementFromPoint(
         view.left + view.width / 2,
         view.top + Math.min(60, view.height / 2),
       );
-      if (!topElement || !viewport.contains(topElement)) {
-        candidates.clear();
-        return;
-      }
+      if (!topElement || !viewport.contains(topElement)) return;
       // A clipped host iframe does not prove that both panes were seen.
       try {
         const frame = window.frameElement;
@@ -37,54 +39,57 @@ export function useLineVisibility(
             r.top < 0 ||
             r.right > window.parent.innerWidth + 1 ||
             r.bottom > window.parent.innerHeight + 1
-          ) {
-            candidates.clear();
+          )
             return;
-          }
         }
       } catch {
         /* Cross-origin hosts control their own viewport. */
       }
 
-      const now = performance.now();
-      const visible = new Set<string>();
       viewport.querySelectorAll<HTMLElement>("[data-review-line]").forEach((row) => {
         const key = row.dataset.reviewLine!;
         if (complete.has(key)) return;
         const r = row.getBoundingClientRect();
-        const top = Math.max(r.top, view.top),
+        const top = Math.max(r.top, visibleTop),
           bottom = Math.min(r.bottom, view.bottom);
         if (bottom <= top || r.height <= 0 || r.right <= view.left || r.left >= view.right) return;
-        visible.add(key);
         const start = (top - r.top) / r.height,
           end = (bottom - r.top) / r.height;
-        const prior = candidates.get(key);
-        if (!prior) {
-          candidates.set(key, { since: now, start, end });
-          return;
-        }
-        // Only the portion that stayed visible for the dwell period counts.
-        const stableStart = Math.max(start, prior.start),
-          stableEnd = Math.min(end, prior.end);
-        if (stableEnd <= stableStart) {
-          candidates.set(key, { since: now, start, end });
-          return;
-        }
-        if (now - prior.since >= 300) {
-          const ranges = addCoverage(coverage.get(key) || [], stableStart, stableEnd);
-          coverage.set(key, ranges);
-          candidates.set(key, { since: now, start, end });
-          if (coverageComplete(ranges)) {
-            complete.add(key);
-            coverage.delete(key);
-            const [file, hunk, indices] = key.split("/");
-            markSeen(+file, +hunk, indices.split(",").map(Number));
-          }
+        const ranges = addCoverage(coverage.get(key) || [], start, end);
+        coverage.set(key, ranges);
+        if (coverageComplete(ranges)) {
+          complete.add(key);
+          coverage.delete(key);
+          const [file, hunk, indices] = key.split("/");
+          markSeenRef.current(+file, +hunk, indices.split(",").map(Number));
         }
       });
-      for (const k of candidates.keys()) if (!visible.has(k)) candidates.delete(k);
     };
-    const timer = setInterval(sample, 120);
-    return () => clearInterval(timer);
-  }, [root, markSeen, layoutKey]);
+    let sampleTimer: ReturnType<typeof setTimeout> | undefined;
+    const sampleAfterLayout = () => {
+      if (sampleTimer !== undefined) return;
+      sampleTimer = setTimeout(() => {
+        sampleTimer = undefined;
+        sample();
+      }, 0);
+    };
+    const viewport = root.current;
+    const renderedRows = new MutationObserver(sampleAfterLayout);
+    const resized = new ResizeObserver(sampleAfterLayout);
+    if (viewport) {
+      renderedRows.observe(viewport, { childList: true, subtree: true });
+      resized.observe(viewport);
+    }
+    viewport?.addEventListener("scroll", sampleAfterLayout, { passive: true });
+    document.addEventListener("visibilitychange", sampleAfterLayout);
+    sample();
+    sampleAfterLayout();
+    return () => {
+      viewport?.removeEventListener("scroll", sampleAfterLayout);
+      document.removeEventListener("visibilitychange", sampleAfterLayout);
+      renderedRows.disconnect();
+      resized.disconnect();
+      if (sampleTimer !== undefined) clearTimeout(sampleTimer);
+    };
+  }, [root, layoutKey]);
 }

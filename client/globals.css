@@ -326,7 +326,7 @@ button {
   align-items: center;
   gap: 7px;
   color: var(--subtext);
-  padding: 0 8px;
+  padding: 0 calc(8px + var(--tree-trailing-control-space)) 0 8px;
   padding-left: calc(var(--tree-folder-inline-start) + var(--tree-indent, 0px));
   border-radius: 4px;
   font-size: 13px;
@@ -360,7 +360,7 @@ button {
   border-radius: 5px !important;
   font-size: 13px !important;
   padding-left: calc(var(--tree-file-inline-start) + var(--tree-indent, 0px)) !important;
-  padding-right: 9px !important;
+  padding-right: calc(9px + var(--tree-trailing-control-space)) !important;
   gap: 8px !important;
   position: relative;
 }
@@ -1082,6 +1082,9 @@ button {
   width: 11px;
   height: 11px;
 }
+.tree-folder-viewed {
+  top: 8px;
+}
 .is-viewed:not([data-active="true"]) {
   color: var(--subtext);
 }
@@ -1095,12 +1098,33 @@ button {
   font-size: 12px;
   color: var(--subtext);
 }
-.auto-label {
-  font-size: 10px;
+.unseen-filter {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
+  border-radius: 5px;
   color: var(--overlay);
+  font-size: 11px;
+}
+.unseen-filter:hover,
+.unseen-filter:focus-visible,
+.unseen-filter[aria-pressed="true"] {
+  color: var(--mauve);
+  border-color: color-mix(in srgb, var(--mauve) 55%, var(--border));
+  background: color-mix(in srgb, var(--mauve) 10%, transparent);
+}
+.unseen-filter svg {
+  width: 12px;
+  height: 12px;
+}
+.tree-empty {
+  padding: 18px 8px;
+  color: var(--overlay);
+  font-size: 12px;
+  text-align: center;
 }
 .continuous-scroll {
   --sticky-file-header-height: 46px;

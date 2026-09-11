@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import { FileDiff, Terminal } from "lucide-react";
+import { useState, type CSSProperties } from "react";
+import { EyeOff, FileDiff, Terminal } from "lucide-react";
 
 import { FileTree } from "@/components/review/file-tree";
 import { SidebarResizer, type ResizeBounds } from "@/components/review/sidebar-resizer";
@@ -36,16 +36,20 @@ function ChangedFilesContent({
   selected,
   viewed,
   readyFiles,
+  unseenOnly,
   onSelect,
   onToggleViewed,
+  onUnseenOnlyChange,
 }: {
   files: ReviewFile[];
   repository: string;
   selected: number;
   viewed: boolean[];
   readyFiles: number;
+  unseenOnly: boolean;
   onSelect: (file: number) => void;
   onToggleViewed: (file: number, viewed: boolean) => void;
+  onUnseenOnlyChange: (enabled: boolean) => void;
 }) {
   return (
     <>
@@ -57,15 +61,19 @@ function ChangedFilesContent({
       </div>
       <ChangeStats files={files} />
       <div className="review-progress">
-        <span>
+        <span title="Files are marked viewed after every diff line has been visible.">
           {viewed.filter(Boolean).length} / {files.length} viewed
         </span>
-        <span
-          className="auto-label"
-          title="Files are marked viewed after every diff line has been visible."
+        <button
+          type="button"
+          className="unseen-filter"
+          aria-pressed={unseenOnly}
+          title="Show only unseen files"
+          onClick={() => onUnseenOnlyChange(!unseenOnly)}
         >
-          Auto
-        </span>
+          <EyeOff />
+          Unseen
+        </button>
       </div>
       <FileTree
         files={files}
@@ -74,6 +82,7 @@ function ChangedFilesContent({
         viewed={viewed}
         onToggle={onToggleViewed}
         readyFiles={readyFiles}
+        unseenOnly={unseenOnly}
       />
       <div className="side-bottom">
         <Terminal />
@@ -110,6 +119,7 @@ export function ChangedFilesSidebar({
   onDrawerChange: (open: boolean) => void;
   onResize: (width: number) => void;
 }) {
+  const [unseenOnly, setUnseenOnly] = useState(false);
   const content = (
     <ChangedFilesContent
       files={files}
@@ -117,8 +127,10 @@ export function ChangedFilesSidebar({
       selected={selected}
       viewed={viewed}
       readyFiles={readyFiles}
+      unseenOnly={unseenOnly}
       onSelect={onSelect}
       onToggleViewed={onToggleViewed}
+      onUnseenOnlyChange={setUnseenOnly}
     />
   );
 

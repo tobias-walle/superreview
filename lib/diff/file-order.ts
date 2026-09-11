@@ -1,5 +1,13 @@
 export type FileTreeEntry =
-  | { kind: "folder"; key: string; label: string; path: string; depth: number; count: number }
+  | {
+      kind: "folder";
+      key: string;
+      label: string;
+      path: string;
+      depth: number;
+      count: number;
+      files: number[];
+    }
   | { kind: "file"; key: string; file: number; depth: number };
 
 type FolderNode = {
@@ -7,6 +15,7 @@ type FolderNode = {
   name: string;
   path: string;
   count: number;
+  files: number[];
   children: Array<FolderNode | FileNode>;
   folders: Map<string, FolderNode>;
 };
@@ -15,19 +24,23 @@ type FileNode = { kind: "file"; path: string; file: number };
 export function buildFileTreeEntries(
   paths: string[],
   closed: ReadonlySet<string>,
+  include: (file: number) => boolean = () => true,
 ): FileTreeEntry[] {
   const root: FolderNode = {
     kind: "folder",
     name: "",
     path: "",
     count: 0,
+    files: [],
     children: [],
     folders: new Map(),
   };
   paths.forEach((path, file) => {
+    if (!include(file)) return;
     const parts = path.split("/");
     let parent = root;
     parent.count++;
+    parent.files.push(file);
     for (let depth = 0; depth < parts.length - 1; depth++) {
       const name = parts[depth];
       const folderPath = parts.slice(0, depth + 1).join("/");
@@ -38,6 +51,7 @@ export function buildFileTreeEntries(
           name,
           path: folderPath,
           count: 0,
+          files: [],
           children: [],
           folders: new Map(),
         };
@@ -45,6 +59,7 @@ export function buildFileTreeEntries(
         parent.children.push(folder);
       }
       folder.count++;
+      folder.files.push(file);
       parent = folder;
     }
     parent.children.push({ kind: "file", path, file });
@@ -69,6 +84,7 @@ export function buildFileTreeEntries(
         path: folder.path,
         depth,
         count: folder.count,
+        files: folder.files,
       });
       if (!closed.has(folder.path)) appendChildren(folder.children, depth + 1);
     }

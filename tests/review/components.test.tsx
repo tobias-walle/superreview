@@ -429,6 +429,7 @@ test("file tree compacts chains containing only one folder", () => {
       path: "agents/claim/src/package",
       depth: 0,
       count: 3,
+      files: [0, 1, 2],
     },
     {
       kind: "folder",
@@ -437,6 +438,7 @@ test("file tree compacts chains containing only one folder", () => {
       path: "agents/claim/src/package/application/use_cases/link_claim",
       depth: 1,
       count: 1,
+      files: [0],
     },
     {
       kind: "file",
@@ -449,6 +451,20 @@ test("file tree compacts chains containing only one folder", () => {
   assert.deepEqual(buildFileTreeEntries(paths, new Set(["agents/claim/src/package"])), [
     entries[0],
   ]);
+});
+
+test("file tree filtering keeps original file indices and folder actions target visible descendants", () => {
+  const paths = ["src/seen.ts", "src/nested/unseen.ts", "docs/unseen.md"];
+  const entries = buildFileTreeEntries(paths, new Set(), (file) => file !== 0);
+
+  assert.deepEqual(
+    entries.flatMap((entry) => (entry.kind === "file" ? [entry.file] : [])),
+    [1, 2],
+  );
+  const src = entries.find((entry) => entry.kind === "folder" && entry.files.includes(1));
+  assert.ok(src?.kind === "folder");
+  assert.deepEqual(src.files, [1]);
+  assert.equal(src.count, 1);
 });
 
 test("comment Markdown renders lists and fenced code but never raw HTML or remote images", () => {
