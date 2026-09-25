@@ -6,6 +6,7 @@ export function parseArgs(input: string[]) {
     refs: [] as string[],
     paths: [] as string[],
     cached: false,
+    unstaged: false,
     fresh: false,
     name: "",
     port: 0,
@@ -75,6 +76,7 @@ export function parseArgs(input: string[]) {
     if (arg === "--help" || arg === "-h") options.command = "help";
     else if (arg === "--version") options.command = "version";
     else if (arg === "--cached" || arg === "--staged") options.cached = true;
+    else if (arg === "--unstaged") options.unstaged = true;
     else if (arg === "--new") options.fresh = true;
     else if (arg === "--review") options.id = value(++i, arg);
     else if (arg === "--name") options.name = value(++i, arg);
@@ -107,6 +109,10 @@ export function parseArgs(input: string[]) {
     } else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}`);
     else options.refs.push(arg);
   }
+  if (options.cached && options.unstaged)
+    throw new Error("Use either --cached or --unstaged, not both");
+  if (options.unstaged && options.refs.length)
+    throw new Error("--unstaged does not accept Git revisions");
   if (
     ["open", "archive", "reopen", "export", "threads", "reply", "comment"].includes(
       options.command,
@@ -124,6 +130,7 @@ export const help = `superreview ${version} - review changes, keep the conversat
   superreview                         Open or resume a working-tree review
   superreview main...HEAD             Open a branch review
   superreview --cached                Open a staged review
+  superreview --unstaged              Open an unstaged and untracked review
   superreview -- src/app.ts           Limit the review to literal paths
 
   superreview create main...HEAD --name "Auth" --json

@@ -156,6 +156,26 @@ test("Git captures staged, unstaged, untracked, deleted and symlink changes with
     const deleted = await capture(root, local, store);
     assert.equal(deleted.evidence["auth.ts"].after.object, null);
   }));
+test("unstaged capture compares the index to the worktree and includes untracked files", async () =>
+  fixture(async (root, store) => {
+    await writeFile(join(root, "auth.ts"), 'const token = "staged";\n');
+    await writeFile(join(root, "staged-only.ts"), "staged only\n");
+    git(root, ["add", "auth.ts", "staged-only.ts"]);
+    await writeFile(join(root, "auth.ts"), 'const token = "working";\n');
+    await writeFile(join(root, "untracked.ts"), "untracked\n");
+
+    const unstaged = await capture(root, { ...local, unstaged: true }, store);
+
+    assert.equal(unstaged.base, "index");
+    assert.equal(unstaged.label, "Unstaged changes");
+    assert.deepEqual(unstaged.data.files.map((file) => file.path).sort(), [
+      "auth.ts",
+      "untracked.ts",
+    ]);
+    const auth = JSON.stringify(unstaged.data.files.find((file) => file.path === "auth.ts"));
+    assert.match(auth, /staged/);
+    assert.match(auth, /working/);
+  }));
 test("batched capture preserves mixed files and unusual paths", async () =>
   fixture(async (root, store) => {
     const paths = ["space name.ts", "tab\tname.ts", 'quote"name.ts', "line\nname.ts"];
@@ -435,6 +455,9 @@ test("failed initial capture can be retried without restarting the server", asyn
 test("CLI parser handles review creation and agent feedback commands", () => {
   assert.deepEqual(parseArgs(["main...feature", "--", "space name.ts"]).paths, ["space name.ts"]);
   assert.equal(parseArgs(["--cached"]).cached, true);
+  assert.equal(parseArgs(["--unstaged"]).unstaged, true);
+  assert.throws(() => parseArgs(["--cached", "--unstaged"]), /either/);
+  assert.throws(() => parseArgs(["--unstaged", "HEAD"]), /does not accept Git revisions/);
   assert.equal(parseArgs(["--verbose"]).verbose, true);
   assert.equal(parseArgs(["create", "main...HEAD"]).command, "create");
   assert.equal(parseArgs(["export", "abc", "--submission", "2"]).submission, 2);

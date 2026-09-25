@@ -213,6 +213,7 @@ async function main() {
       refs: options.refs,
       paths: options.paths,
       cached: options.cached,
+      unstaged: options.unstaged,
     };
     const comparisonKey = JSON.stringify(comparison);
     const targetOf = (spec: Comparison) => {

@@ -28,6 +28,7 @@ superreview main..feature           # endpoint comparison
 superreview main...feature          # merge-base comparison
 superreview main feature            # endpoint comparison
 superreview --cached                 # HEAD vs index
+superreview --unstaged               # index vs working tree, including untracked files
 superreview --verbose                # log startup and capture timings to stderr
 superreview --cached main            # main vs index
 superreview -- src/app.ts            # literal repository-relative paths

@@ -8,7 +8,12 @@ import type { CaptureProgress, Evidence, FileVersion, Snapshot } from "../../lib
 import type { JsonlStore } from "./jsonl-store";
 import { startTiming, type TimingLogger } from "./diagnostics";
 
-export type Comparison = { refs: string[]; cached: boolean; paths: string[] };
+export type Comparison = {
+  refs: string[];
+  cached: boolean;
+  unstaged?: boolean;
+  paths: string[];
+};
 const GIT_BUFFER_BYTES = 512 * 1024 * 1024;
 const PATH_BATCH_SIZE = 1000;
 const OBJECT_BATCH_SIZE = 256;
@@ -67,12 +72,15 @@ function commit(root: string, ref: string) {
   }
 }
 export function resolveComparison(root: string, comparison: Comparison) {
-  const { refs, cached } = comparison;
+  const { refs, cached, unstaged } = comparison;
   if (refs.length > 2) throw new Error("Use one revision, two revisions, or A..B / A...B.");
+  if (cached && unstaged) throw new Error("Use either --cached or --unstaged, not both");
+  if (unstaged && refs.length) throw new Error("--unstaged does not accept Git revisions");
   let base: string,
     target = cached ? "index" : "working-tree";
-  let label = cached ? "Staged changes" : "Local changes";
-  if (!refs.length) {
+  let label = cached ? "Staged changes" : unstaged ? "Unstaged changes" : "Local changes";
+  if (unstaged) base = "index";
+  else if (!refs.length) {
     try {
       base = commit(root, "HEAD");
     } catch {
@@ -117,12 +125,15 @@ async function captureCommit(root: string, ref: string) {
   }
 }
 async function resolveCaptureComparison(root: string, comparison: Comparison) {
-  const { refs, cached } = comparison;
+  const { refs, cached, unstaged } = comparison;
   if (refs.length > 2) throw new Error("Use one revision, two revisions, or A..B / A...B.");
+  if (cached && unstaged) throw new Error("Use either --cached or --unstaged, not both");
+  if (unstaged && refs.length) throw new Error("--unstaged does not accept Git revisions");
   let base: string,
     target = cached ? "index" : "working-tree";
-  let label = cached ? "Staged changes" : "Local changes";
-  if (!refs.length) {
+  let label = cached ? "Staged changes" : unstaged ? "Unstaged changes" : "Local changes";
+  if (unstaged) base = "index";
+  else if (!refs.length) {
     try {
       base = await captureCommit(root, "HEAD");
     } catch {
@@ -313,7 +324,7 @@ export async function capture(
     "-z",
     "--no-renames",
     ...(comparison.cached ? ["--cached"] : []),
-    resolved.base,
+    ...(comparison.unstaged ? [] : [resolved.base]),
     ...(!["index", "working-tree"].includes(resolved.target) ? [resolved.target] : []),
     "--",
     ...comparison.paths,

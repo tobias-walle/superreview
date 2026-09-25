@@ -159,6 +159,7 @@ superreview --no-open --json                 # HEAD versus working tree
 superreview main...HEAD --no-open --json     # changes since the merge base
 superreview main..feature --no-open --json   # compare endpoints
 superreview --cached --no-open --json        # staged changes
+superreview --unstaged --no-open --json      # unstaged and untracked changes
 superreview --no-open --json -- src/app.ts   # literal repository-relative path
 ```
 

@@ -12,6 +12,7 @@ export type ComparisonSpec = {
   refs: string[];
   paths: string[];
   cached: boolean;
+  unstaged?: boolean;
 };
 export type Snapshot = {
   comparison?: ComparisonSpec;

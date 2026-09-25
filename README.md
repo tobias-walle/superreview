@@ -10,6 +10,7 @@ After [installing Superreview](#installation), run it inside the Git repository 
 
 ```sh
 superreview                 # Review staged, unstaged, and untracked changes
+superreview --unstaged      # Review unstaged and untracked changes only
 superreview main...HEAD     # Review your branch against main
 ```
 
