@@ -19,6 +19,7 @@ export function parseArgs(input: string[]) {
     threadId: "",
     submission: 0,
     snapshot: "",
+    bundle: "",
     path: "",
     side: "new" as "old" | "new",
     line: 0,
@@ -40,6 +41,18 @@ export function parseArgs(input: string[]) {
     options.command = "skill";
     options.json = args.includes("--json");
     return options;
+  }
+  if (args[0] === "guide") {
+    args.shift();
+    if (["--help", "-h"].includes(args[0])) {
+      options.command = "help";
+      return options;
+    }
+    const operation = args.shift();
+    if (!operation || !["inspect", "validate", "import"].includes(operation))
+      throw new Error("Usage: superreview guide inspect|validate|import <review-id> [options]");
+    options.command = `guide-${operation}`;
+    options.id = args.shift() || "";
   }
   const commands = [
     "create",
@@ -81,6 +94,7 @@ export function parseArgs(input: string[]) {
     else if (arg === "--review") options.id = value(++i, arg);
     else if (arg === "--name") options.name = value(++i, arg);
     else if (arg === "--snapshot") options.snapshot = value(++i, arg);
+    else if (arg === "--bundle") options.bundle = value(++i, arg);
     else if (arg === "--path") options.path = value(++i, arg);
     else if (arg === "--side") {
       const side = value(++i, arg);
@@ -120,6 +134,18 @@ export function parseArgs(input: string[]) {
     !options.id
   )
     throw new Error("Specify a review ID. Use superreview list.");
+  if (options.command.startsWith("guide-")) {
+    if (!options.id || options.id.startsWith("-"))
+      throw new Error("Specify a review ID. Use superreview list.");
+    if (options.command === "guide-inspect" && !options.snapshot)
+      throw new Error("Guide inspection requires --snapshot <snapshot-id>");
+    if (options.command !== "guide-inspect" && !options.bundle)
+      throw new Error("Usage: guide validate/import requires --bundle <directory>");
+    if (options.command !== "guide-inspect" && options.snapshot)
+      throw new Error("The bundle manifest supplies the snapshot ID");
+    if (options.refs.length || options.paths.length || options.cached || options.unstaged)
+      throw new Error("A guide command reads saved snapshots and does not accept Git comparisons");
+  }
   if (options.command === "reply" && !options.threadId) throw new Error("Specify a thread ID");
   if (options.command === "create" && options.id)
     throw new Error("create always starts a new review. Do not use --review.");
@@ -138,6 +164,13 @@ export const help = `superreview ${version} - review changes, keep the conversat
   superreview list --json             List saved reviews
   superreview open <id>               Open the exact saved snapshot
   superreview threads <id> --json     Read current threads and submission changes
+  superreview guide inspect <id> --snapshot <snapshot-id> --json
+                                      Read saved full diff, inventory and captured source
+  superreview guide validate <id> --bundle <directory> --json
+                                      Validate explicit assignments without writes
+  superreview guide import <id> --bundle <directory> --json
+                                      Publish an immutable agent-authored guide
+                                      Requires --expected-sequence; supports --author, --request-id
   superreview export <id>             Export the latest submitted round
   superreview reply <id> <thread-id> --body-file reply.md --json
                                       Add an agent reply

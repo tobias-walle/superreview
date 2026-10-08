@@ -65,7 +65,7 @@ const seen = new Set();
 async function collect(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) continue;
     const path = `${directory}/${entry.name}`;
     if (entry.name.startsWith("@")) {
       await collect(path);
@@ -91,4 +91,15 @@ async function collect(directory) {
   }
 }
 await collect("node_modules");
+// pnpm links direct dependencies and stores each transitive version separately.
+// Include their notices too, including versions not selected for root hoisting.
+const storeDirectory = "node_modules/.pnpm";
+const storeEntries = await readdir(storeDirectory, { withFileTypes: true }).catch((error) => {
+  if (error.code === "ENOENT") return [];
+  throw error;
+});
+for (const entry of storeEntries) {
+  if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+  await collect(`${storeDirectory}/${entry.name}/node_modules`);
+}
 await writeFile("dist-cli/THIRD_PARTY_NOTICES.md", notices);

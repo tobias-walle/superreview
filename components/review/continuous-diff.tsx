@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, ChevronDown, ChevronRight, Copy, Plus, RotateCcw } from "lucide-react";
@@ -31,13 +32,35 @@ import {
 } from "@/lib/diff/render";
 import type { Evidence } from "@/lib/review/types";
 import { scrollBoundary } from "@/lib/diff/file-order";
+import {
+  projectScopedRows,
+  scopedBlockSources,
+  scopeContainsAnchor,
+  anchorFileIndex,
+  type DiffScope,
+  type SourceMask,
+  type ScopedRows,
+} from "@/lib/diff/scoped-blocks";
 export type DiffHandle = {
   scrollToFile: (index: number) => void;
   scrollToAnchor: (anchor: Anchor) => void;
+  scrollToStart: () => void;
 };
 type Item = {
   key: string;
-  kind: "header" | "hunk" | "gap" | "block" | "context" | "end" | "binary" | "filtered-empty";
+  kind:
+    | "header"
+    | "hunk"
+    | "gap"
+    | "block"
+    | "context"
+    | "end"
+    | "binary"
+    | "filtered-empty"
+    | "scope"
+    | "omitted"
+    | "explanation";
+  mask?: SourceMask;
   file: number;
   hunk?: number;
   block?: number;
@@ -47,6 +70,8 @@ type Item = {
   gapCount?: number;
   gapState?: "loading" | "error";
 };
+const SCOPE_NOTICE_HEIGHT_PX = 64;
+const EXPLANATION_ESTIMATED_HEIGHT_PX = 240;
 const MOBILE_VIEWPORT_MAX_WIDTH_PX = 767;
 const HUNK_HEADER_HEIGHT_PX = 31;
 const DESKTOP_FILE_HEADER_GAP_PX = 18;
@@ -56,6 +81,10 @@ const MOBILE_FILE_HEADER_HEIGHT_PX = 44;
 type Props = {
   preparationMs: number;
   fileOrder: readonly number[];
+  /** Presentation only. Keep files and worker metadata attached to the full snapshot. */
+  scope?: DiffScope;
+  onOpenFullFile?: (file: number, anchor?: Anchor) => void;
+  explanation?: ReactNode;
   files: ReviewFile[];
   evidence: Record<string, Evidence>;
   readContent: (object: string) => Promise<string>;
@@ -301,6 +330,9 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const {
     files,
     fileOrder,
+    scope,
+    onOpenFullFile,
+    explanation,
     meta,
     mode,
     hideDeletions,
@@ -330,7 +362,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const [sourceContents, setSourceContents] = useState(new Map<string, string | Error>());
   const anchor = useRef<Item | undefined>(undefined);
   const previousLayout = useRef("");
+  // Keep the selected short file active until the human scrolls. This is not a
+  // pending scroll request and must not replay when explanation props change.
   const navigationTarget = useRef<number | undefined>(undefined);
+  const pendingFileTarget = useRef<number | undefined>(undefined);
   const navigationStartsAtFile = useRef(false);
   const activeTraversal = useRef<{ file: number; fromStart: boolean; scroll: number } | undefined>(
     undefined,
@@ -341,6 +376,14 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       const next = new Set(old);
       if (next.has(file)) next.delete(file);
       else next.add(file);
+      return next;
+    });
+  }, []);
+  const expandFile = useCallback((file: number) => {
+    setCollapsed((current) => {
+      if (!current.has(file)) return current;
+      const next = new Set(current);
+      next.delete(file);
       return next;
     });
   }, []);
@@ -381,6 +424,9 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   );
   useEffect(() => {
     setExpandedGaps(new Set());
+    setPendingComment(null);
+    navigationTarget.current = undefined;
+    pendingFileTarget.current = undefined;
   }, [files]);
   useEffect(() => {
     if (!root.current) return;
@@ -392,12 +438,62 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   const { items, starts } = useMemo(() => {
     const items: Item[] = [],
       starts: number[] = [];
+    if (explanation && fileOrder.length)
+      items.push({ key: "scope:explanation", kind: "explanation", file: fileOrder[0] });
     fileOrder.forEach((fi) => {
       const file = meta[fi];
-      if (!file) return;
+      if (!file || (scope && !scope.has(fi))) return;
       starts[fi] = items.length;
       items.push({ key: `${fi}:header`, kind: "header", file: fi });
       if (collapsed.has(fi)) return;
+      const scoped = scope?.get(fi);
+      if (scoped?.partial) {
+        items.push({ key: `${fi}:scope`, kind: "scope", file: fi });
+        const onlyHiddenDeletions =
+          hideDeletions &&
+          file.hunks.every((hunk, hi) =>
+            hunk.new.every((block) => !scopedBlockSources(block, scoped.hunks[hi]).length),
+          );
+        if (onlyHiddenDeletions) {
+          items.push({ key: `${fi}:filtered-empty`, kind: "filtered-empty", file: fi });
+          items.push({ key: `${fi}:end`, kind: "end", file: fi });
+          return;
+        }
+        const omit = (key: string) => {
+          if (items.at(-1)?.kind !== "omitted") items.push({ key, kind: "omitted", file: fi });
+        };
+        file.hunks.forEach((hunk, hi) => {
+          const mask = scoped.hunks[hi];
+          if (!mask) return;
+          if (hiddenContextBefore(files[fi].hunks, hi)) omit(`${fi}:${hi}:scope-gap`);
+          let heading = false;
+          hunk[blockMode].forEach((block, bi) => {
+            const sources = scopedBlockSources(block, mask);
+            if (!sources.length) {
+              omit(`${fi}:${hi}:${blockMode}:${bi}:omitted`);
+              return;
+            }
+            if (!heading) {
+              items.push({ key: `${fi}:${hi}:hunk`, kind: "hunk", file: fi, hunk: hi });
+              heading = true;
+            }
+            items.push({
+              // This is still the ORIGINAL worker request/cache key.
+              key: `${fi}:${hi}:${blockMode}:${bi}`,
+              kind: "block",
+              file: fi,
+              hunk: hi,
+              block: bi,
+              meta: { ...block, sources },
+              mask,
+            });
+          });
+        });
+        // Never expose the lazy full-source expander in a partial view.
+        omit(`${fi}:scope-tail`);
+        items.push({ key: `${fi}:end`, kind: "end", file: fi });
+        return;
+      }
       if (hideDeletions && !files[fi].binary && file.hunks.every((hunk) => !hunk.new.length)) {
         items.push({ key: `${fi}:filtered-empty`, kind: "filtered-empty", file: fi });
         items.push({ key: `${fi}:end`, kind: "end", file: fi });
@@ -494,6 +590,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
     return { items, starts };
   }, [
     fileOrder,
+    scope,
+    explanation,
     meta,
     files,
     mode,
@@ -511,7 +609,10 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         return (
           64 + (mode === "split" && !collapsed.has(item.file) && !files[item.file].binary ? 29 : 0)
         );
-      if (item.kind === "hunk" || item.kind === "gap") return HUNK_HEADER_HEIGHT_PX;
+      if (item.kind === "hunk" || item.kind === "gap" || item.kind === "omitted")
+        return HUNK_HEADER_HEIGHT_PX;
+      if (item.kind === "scope") return SCOPE_NOTICE_HEIGHT_PX;
+      if (item.kind === "explanation") return EXPLANATION_ESTIMATED_HEIGHT_PX;
       if (item.kind === "end") return 32;
       if (item.kind === "binary" || item.kind === "filtered-empty") return 96;
       const narrow = width < 700;
@@ -553,9 +654,11 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   let stickyFileIndex: number | undefined;
   if (topVirtualItem) {
     const topItem = items[topVirtualItem.index];
-    if (topItem.kind !== "header" || scrollTop >= topVirtualItem.start + headerGap) {
+    if (topItem.kind === "explanation") {
+      stickyFileIndex = undefined;
+    } else if (topItem.kind !== "header" || scrollTop >= topVirtualItem.start + headerGap) {
       stickyFileIndex = topItem.file;
-    } else if (topVirtualItem.index > 0) {
+    } else if (topVirtualItem.index > 0 && items[topVirtualItem.index - 1].kind !== "explanation") {
       stickyFileIndex = items[topVirtualItem.index - 1].file;
     }
   }
@@ -574,7 +677,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   useEffect(() => {
     activeTraversal.current = undefined;
     traversedFiles.current.clear();
-  }, [layout, collapsedKey, files]);
+  }, [layout, collapsedKey, files, scope]);
   const keys = visible
     .filter((v) => items[v.index]?.kind === "block")
     .map((v) => items[v.index].key)
@@ -611,7 +714,8 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       if (boundary === "end") active = items[items.length - 1].file;
       if (navigationTarget.current !== undefined && (areas.get(navigationTarget.current) || 0) > 0)
         active = navigationTarget.current;
-      if (!hideDeletions) {
+      // A partial presentation cannot prove traversal of the original file.
+      if (!hideDeletions && !scope) {
         const previous = activeTraversal.current;
         if (!previous) {
           activeTraversal.current = { file: active, fromStart: boundary === "start", scroll };
@@ -654,11 +758,30 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       }
       onActive(active);
     }
-  }, [visible, items, onActive, scrollTop, hideDeletions, fileOrder, markTraversed, collapsed]);
+  }, [
+    visible,
+    items,
+    onActive,
+    scrollTop,
+    hideDeletions,
+    fileOrder,
+    markTraversed,
+    collapsed,
+    scope,
+  ]);
   useLayoutEffect(() => {
     if (previousLayout.current && previousLayout.current !== layout) {
       const old = anchor.current;
       virtual.measure();
+      // Refresh estimated offsets before resizeItem compares against them.
+      virtual.getTotalSize();
+      // Clearing the size cache does not resize mounted DOM nodes. Remeasure
+      // them now so wrapped scope notices cannot overlap the following item.
+      for (const element of root.current?.querySelectorAll<HTMLElement>(".virtual-diff-item") ||
+        []) {
+        // measureElement may defer while scrolling, including our restoration.
+        virtual.resizeItem(Number(element.dataset.index), element.offsetHeight);
+      }
       const candidates = old
         ? items.filter(
             (item) => item.file === old.file && item.kind === old.kind && item.hunk === old.hunk,
@@ -680,16 +803,29 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
   useImperativeHandle(
     ref,
     () => ({
+      scrollToStart() {
+        navigationTarget.current = undefined;
+        pendingFileTarget.current = undefined;
+        setPendingComment(null);
+        if (root.current) root.current.scrollTop = 0;
+      },
       scrollToAnchor(a) {
-        const file = files.findIndex((candidate) => candidate.fingerprint === a.fingerprint);
+        pendingFileTarget.current = undefined;
+        const file = anchorFileIndex(files, a);
         if (file < 0) return;
+        if (!scopeContainsAnchor(scope, file, files[file], a)) {
+          if (onOpenFullFile) {
+            // Wait for the caller to switch scope before requesting or scrolling
+            // original blocks. The callback may update the workspace asynchronously.
+            setPendingComment(a);
+            onOpenFullFile(file, a);
+          }
+          return;
+        }
+        if (a.side === "old" && hideDeletions && a.kind !== "file") onShowDeletions();
         navigationTarget.current = file;
         navigationStartsAtFile.current = a.kind === "file";
-        setCollapsed((old) => {
-          const n = new Set(old);
-          n.delete(file);
-          return n;
-        });
+        expandFile(file);
         if (a.kind === "file") {
           virtual.scrollToIndex(starts[file], { align: "start" });
           return;
@@ -697,29 +833,61 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
         setPendingComment(a);
       },
       scrollToFile(index) {
+        if (!fileOrder.includes(index)) return;
         navigationTarget.current = index;
         navigationStartsAtFile.current = true;
-        if (starts[index] === undefined) return;
-        setCollapsed((old) => {
-          if (!old.has(index)) return old;
-          const next = new Set(old);
-          next.delete(index);
-          return next;
-        });
+        setPendingComment(null);
+        if (starts[index] === undefined) {
+          pendingFileTarget.current = index;
+          return;
+        }
+        pendingFileTarget.current = undefined;
+        expandFile(index);
         virtual.scrollToIndex(starts[index], { align: "start" });
       },
     }),
-    [starts, virtual, files],
+    [
+      starts,
+      virtual,
+      files,
+      fileOrder,
+      scope,
+      expandFile,
+      onOpenFullFile,
+      hideDeletions,
+      onShowDeletions,
+    ],
   );
   useEffect(() => {
-    const target = navigationTarget.current;
-    if (target !== undefined && starts[target] !== undefined)
-      virtual.scrollToIndex(starts[target], { align: "start" });
-  }, [starts, virtual]);
+    const target = pendingFileTarget.current;
+    if (target === undefined) return;
+    if (!fileOrder.includes(target)) {
+      pendingFileTarget.current = undefined;
+      return;
+    }
+    if (starts[target] === undefined) return;
+    pendingFileTarget.current = undefined;
+    expandFile(target);
+    virtual.scrollToIndex(starts[target], { align: "start" });
+  }, [starts, virtual, fileOrder, expandFile]);
   useEffect(() => {
     if (!pendingComment) return;
     const a = pendingComment;
-    const fi = meta.findIndex((m) => m.fingerprint === a.fingerprint);
+    const fi = anchorFileIndex(files, a);
+    if (fi < 0 || meta[fi]?.fingerprint !== a.fingerprint) return;
+    if (!scopeContainsAnchor(scope, fi, files[fi], a)) return;
+    navigationTarget.current = fi;
+    expandFile(fi);
+    if (a.kind === "file") {
+      if (starts[fi] === undefined) return;
+      virtual.scrollToIndex(starts[fi], { align: "start" });
+      setPendingComment(null);
+      return;
+    }
+    if (a.side === "old" && hideDeletions) {
+      onShowDeletions();
+      return;
+    }
     const index = items.findIndex(
       (i) =>
         i.file === fi &&
@@ -740,7 +908,21 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
       virtual.scrollToIndex(index, { align: "start" });
       request([items[index].key]);
     }
-  }, [pendingComment, items, meta, version, virtual, request, keys]);
+  }, [
+    pendingComment,
+    expandFile,
+    items,
+    meta,
+    files,
+    scope,
+    starts,
+    hideDeletions,
+    onShowDeletions,
+    version,
+    virtual,
+    request,
+    keys,
+  ]);
   useLineVisibility(root, markSeen, layout);
   return (
     <div
@@ -813,6 +995,18 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
           {visible.map((v) => {
             const item = items[v.index],
               file = files[item.file];
+            let filteredNotice = "No resulting lines in this diff";
+            if (file.status === "D") filteredNotice = "Deleted file · No new content";
+            else if (scope?.get(item.file)?.partial)
+              filteredNotice = "No resulting lines in this chunk";
+            let blockParts: ScopedRows[] | undefined;
+            if (item.kind === "block") {
+              const rows = getBlock(item.key);
+              if (rows) {
+                if (item.mask) blockParts = projectScopedRows(rows, item.mask, mode);
+                else blockParts = [{ kind: "rows", rows }];
+              }
+            }
             return (
               <div
                 key={v.key}
@@ -827,7 +1021,24 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                   transform: `translateY(${v.start}px)`,
                 }}
               >
-                {item.kind === "header" ? (
+                {item.kind === "explanation" ? (
+                  <div className="guide-reading-surface">{explanation}</div>
+                ) : item.kind === "scope" ? (
+                  <div className="filtered-file-notice">
+                    <span>Partial file · Only this chunk’s ranges and nearby unchanged rows</span>
+                    <button
+                      className="control"
+                      disabled={!onOpenFullFile}
+                      onClick={() => onOpenFullFile?.(item.file)}
+                    >
+                      Open full file
+                    </button>
+                  </div>
+                ) : item.kind === "omitted" ? (
+                  <div className="hunk-label stream-hunk">
+                    Changes or context omitted from this chunk
+                  </div>
+                ) : item.kind === "header" ? (
                   <div
                     className={`stream-file-header ${collapsed.has(item.file) ? "collapsed" : ""}`}
                   >
@@ -920,19 +1131,30 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                     interactive={false}
                   />
                 ) : item.kind === "block" ? (
-                  getBlock(item.key) ? (
-                    <CodeBlock
-                      rows={getBlock(item.key)!}
-                      file={item.file}
-                      hunk={item.hunk!}
-                      reviewFile={files[item.file]}
-                      mode={mode}
-                      newSideOnly={hideDeletions}
-                      words={words}
-                      wrap={wrap}
-                      evidence={evidence[file.path]}
-                      readContent={readContent}
-                    />
+                  blockParts ? (
+                    blockParts.map((part, index) =>
+                      part.kind === "omitted" ? (
+                        <div key={index} className="hunk-label stream-hunk">
+                          {part.changes
+                            ? "Changes omitted from this chunk"
+                            : "Context omitted from this chunk"}
+                        </div>
+                      ) : (
+                        <CodeBlock
+                          key={index}
+                          rows={part.rows}
+                          file={item.file}
+                          hunk={item.hunk!}
+                          reviewFile={files[item.file]}
+                          mode={mode}
+                          newSideOnly={hideDeletions}
+                          words={words}
+                          wrap={wrap}
+                          evidence={evidence[file.path]}
+                          readContent={readContent}
+                        />
+                      ),
+                    )
                   ) : (
                     <div
                       className="block-placeholder"
@@ -944,11 +1166,7 @@ export const ContinuousDiff = forwardRef<DiffHandle, Props>(function ContinuousD
                   )
                 ) : item.kind === "filtered-empty" ? (
                   <div className="filtered-file-notice">
-                    <span>
-                      {file.status === "D"
-                        ? "Deleted file · No new content"
-                        : "No resulting lines in this diff"}
-                    </span>
+                    <span>{filteredNotice}</span>
                     <button className="control" onClick={onShowDeletions}>
                       Show deletions
                     </button>

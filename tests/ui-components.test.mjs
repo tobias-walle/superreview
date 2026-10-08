@@ -43,6 +43,16 @@ test("emits workspace animation and scrolling accessibility styles", async () =>
   // Tailwind correctly omits unused catalog effects from this product build.
   // The workspace keeps visible scrollbars and respects reduced-motion settings.
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  // Guide diagrams must override the shared 16px icon rule, not rely on layered utilities.
+  assert.match(css, /\.guide-diagram-image svg\s*\{[^}]*width:\s*auto[^}]*height:\s*auto/s);
+  assert.match(css, /\.guide-chunk-read\s*\{[^}]*width:\s*32px[^}]*height:\s*32px/s);
+});
+
+test("bundled guided-review dependencies retain their license notices", async () => {
+  const notices = await readFile(path.join(root, "dist-cli/THIRD_PARTY_NOTICES.md"), "utf8");
+  assert.match(notices, /^## mermaid@/m);
+  assert.match(notices, /^## dompurify@/m);
+  assert.match(notices, /^## @mermaid-js\/parser@/m);
 });
 
 test("renders sidebar skeletons deterministically", async () => {

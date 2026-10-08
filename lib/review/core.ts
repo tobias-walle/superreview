@@ -11,6 +11,8 @@ export function emptyReview(identity: ReviewIdentity): ReviewState {
     threads: [],
     checkpoints: {},
     submissions: [],
+    guides: [],
+    guideReads: {},
   };
 }
 export function revision(thread: Thread): string {
@@ -47,6 +49,35 @@ export function evolve(state: ReviewState, event: Event): ReviewState {
       return { ...next, snapshotId: event.snapshotId };
     case "archive":
       return { ...next, archived: event.archived };
+    case "guide-published": {
+      if (state.guides.some((guide) => guide.id === event.guide.id))
+        throw new Error("Guide revision is already published");
+      if (event.guide.author.kind !== "agent") throw new Error("Guide author must be an agent");
+      return {
+        ...next,
+        guides: [...state.guides, event.guide],
+        guideReads: {
+          ...state.guideReads,
+          [event.guide.id]: Object.fromEntries(event.guide.chunkIds.map((id) => [id, false])),
+        },
+      };
+    }
+    case "guide-read": {
+      const guide = state.guides.find((guide) => guide.id === event.guideId);
+      if (
+        !guide ||
+        guide.snapshotId !== event.snapshotId ||
+        !guide.chunkIds.includes(event.chunkId)
+      )
+        throw new Error("Read confirmation does not match a published guide chunk");
+      return {
+        ...next,
+        guideReads: {
+          ...state.guideReads,
+          [guide.id]: { ...state.guideReads[guide.id], [event.chunkId]: event.read },
+        },
+      };
+    }
     default:
       throw new Error("Unknown event type");
   }
@@ -67,6 +98,12 @@ export function decide(
     sequence: state.sequence + 1,
     created: now,
   };
+  if (command.type === "guide-read") {
+    const guide = state.guides.find((guide) => guide.id === command.guideId);
+    if (!guide) throw new Error("Guide revision is not published in this review");
+    if (!guide.chunkIds.includes(command.chunkId)) throw new Error("Unknown guide chunk");
+    return { ...envelope, ...command, snapshotId: guide.snapshotId };
+  }
   if (command.type !== "submit") return { ...envelope, ...structuredClone(command) };
   if (!snapshot) throw new Error("Capture a snapshot before submitting.");
   const threads = structuredClone(pendingThreads(state));

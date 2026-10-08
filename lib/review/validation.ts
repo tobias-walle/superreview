@@ -59,6 +59,14 @@ export const commandSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("submit"), summary: z.string().max(30000) }),
   z.object({ type: z.literal("archive"), archived: z.boolean() }),
+  z
+    .object({
+      type: z.literal("guide-read"),
+      guideId: z.string().min(1).max(100),
+      chunkId: z.string().min(1).max(100),
+      read: z.boolean(),
+    })
+    .strict(),
 ]);
 export const draftsSchema = z
   .array(

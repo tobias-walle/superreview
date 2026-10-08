@@ -25,3 +25,7 @@ The individual checks are:
 For UI changes, launch the built CLI against a temporary Git repository and check both themes, unified and split views, narrow mobile layout, dialogs, and keyboard controls. The server must remain bound to `127.0.0.1`. Report browser checks that the environment cannot run.
 
 Physical iOS, Android, Windows, and macOS launch behavior require platform-specific verification.
+
+## Guided reviews
+
+See [the guided-review test guide](GUIDED_REVIEW_TESTING.md) for saved-snapshot authoring, validation, publication, scope navigation, independent read state and failure checks. Use a temporary repository and an authoring bundle outside its worktree. Guide publication must not change an already-open workspace, and partial scopes must never earn coverage for omitted rows.

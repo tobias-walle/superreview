@@ -6,16 +6,30 @@ import type { JsonlStore } from "./jsonl-store";
 import { capture, type Comparison } from "./git";
 import { commandSchema, draftsSchema } from "../../lib/review/validation";
 import { startTiming, type TimingLogger } from "./diagnostics";
+import { z } from "zod";
+import type { GuideBundle } from "../../lib/review/guide";
+
+const importEnvelope = z
+  .object({
+    bundle: z.unknown(),
+    sequence: z.number().int().nonnegative(),
+    id: z.string().min(1).max(100),
+    authorName: z.string().min(1).max(200),
+  })
+  .strict();
+// JSON escaping can expand a document byte to six bytes. Keep room for
+// a maximum-size authoring bundle and its publication envelope.
+const GUIDE_REQUEST_BYTES = 32 * 1024 * 1024;
+const COMMAND_REQUEST_BYTES = 4 * 1024 * 1024;
 
 const initialProgress: CaptureProgress = { phase: "discovering", completed: 0, total: 0 };
 
-async function body(req: IncomingMessage) {
+async function body(req: IncomingMessage, limit = COMMAND_REQUEST_BYTES) {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 4 * 1024 * 1024)
-      throw Object.assign(new Error("Request too large"), { status: 413 });
+    if (size > limit) throw Object.assign(new Error("Request too large"), { status: 413 });
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString());
@@ -122,6 +136,8 @@ export async function startServer(options: {
           if (req.method === "GET" && url.pathname === "/api/session") result = await session();
           else if (req.method === "GET" && url.pathname.startsWith("/api/snapshots/"))
             result = await store.snapshot(url.pathname.slice("/api/snapshots/".length));
+          else if (req.method === "GET" && url.pathname.startsWith("/api/guides/"))
+            result = await store.guide(url.pathname.slice("/api/guides/".length));
           else if (req.method === "GET" && url.pathname.startsWith("/api/objects/"))
             result = {
               content: (
@@ -136,7 +152,10 @@ export async function startServer(options: {
               throw Object.assign(new Error("Invalid request headers"), {
                 status: 403,
               });
-            const value = await body(req);
+            const value = await body(
+              req,
+              url.pathname === "/api/guides/import" ? GUIDE_REQUEST_BYTES : COMMAND_REQUEST_BYTES,
+            );
             if (url.pathname === "/api/commands") {
               if (
                 !Number.isInteger(value.sequence) ||
@@ -146,6 +165,16 @@ export async function startServer(options: {
                 throw new Error("Invalid command envelope");
               result = await enqueue(() =>
                 store.execute(commandSchema.parse(value.command), value.sequence, value.id),
+              );
+            } else if (url.pathname === "/api/guides/import") {
+              const publication = importEnvelope.parse(value);
+              result = await enqueue(() =>
+                store.importGuide(
+                  publication.bundle as GuideBundle,
+                  publication.sequence,
+                  publication.id,
+                  publication.authorName,
+                ),
               );
             } else if (url.pathname === "/api/drafts") {
               if (!Number.isInteger(value.revision)) throw new Error("Invalid draft revision");
@@ -183,7 +212,7 @@ export async function startServer(options: {
       } catch (error: any) {
         res.statusCode = error.status || (error.code === "ENOENT" ? 404 : 400);
         res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: error.message }));
+        res.end(JSON.stringify({ error: error.message, diagnostics: error.diagnostics }));
       }
     };
     void run();

@@ -26,7 +26,17 @@ The bundled SPA retains its virtual diff worker and block cache. The worker publ
 
 Review identity reserves optional remote provider/repository/request metadata. A future sync adapter should map local thread/message/revision and submission IDs to provider IDs, with explicit delivery states and idempotency keys. Local submission and remote delivery are separate facts. There is no authentication or remote write code now.
 
-A future guide can live in `reviews/<id>/guide.md` and reference immutable snapshots, files, ranges, and threads. It should be an artifact prepared by an external skill/harness. No model client or guide engine belongs in this release.
+## Guided reviews
+
+Guides are external agent-authored interpretations of immutable snapshots. `lib/review/guide-coverage.ts` derives the complete interval inventory and metadata markers. `guide-validation.ts` checks manifest shape, captured source bounds, actual Markdown narrative links and explicit union coverage. Validation and publication use the same rules. `Snapshot.captureView` distinguishes full captures from Since reviewed without guessing from labels. Legacy snapshots remain reviewable but require recapture before guide publication.
+
+The node bundle adapter reads bounded UTF-8 content within the authoring root. Publication revalidates the exact in-memory bundle under the existing queue or repository lock, installs an immutable `guides/<revision-id>.json` artifact, then appends its descriptor. Artifact and request hashes detect damage and conflicting retries. Session polling transfers descriptors, not repeated explanation content. `ReviewClient.guide()` loads artifacts lazily. Publication order selects the latest valid matching revision when opening a snapshot, never an author-supplied timestamp. New publications do not switch an open workspace.
+
+Chunk-read events are keyed by revision and chunk. They do not alter viewed checkpoints, threads or submissions, and new revisions start unread. State-only polling preserves the snapshot object so guide/read/comment changes do not rebuild the diff worker.
+
+`lib/diff/scoped-blocks.ts` projects cached original rows with side-aware masks. The worker always receives the complete snapshot array. Scope controls original file indices, tree order, counters and navigation without changing hunk/source coordinates or anchors. Three nearby unchanged rows provide context, with explicit omission boundaries. Partial scopes do not use the file-traversal viewed shortcut. Only genuinely visible original rows contribute to the existing full-file evidence requirement.
+
+Guide explanations have a dedicated safe Markdown wrapper and render as one continuous reading surface. Mermaid renders locally through a bounded policy and sanitized SVG. Explanations and diagrams never earn viewed coverage or chunk confirmations. Ordinary comments keep their existing Markdown behavior. [The guided-review testing guide](GUIDED_REVIEW_TESTING.md) records the supported behavior and acceptance checks. No model client, remote upload or guide-planning engine belongs in Superreview.
 
 ## Tests
 

@@ -1,5 +1,6 @@
 import type { Draft, Thread } from "../comments/model";
 import type { ReviewData } from "../diff/render";
+import type { GuideDescriptor, GuideReads, PublishedGuide } from "./guide";
 
 export type FileVersion = { object: string | null; mode: string };
 export type Evidence = { before: FileVersion; after: FileVersion; key: string };
@@ -15,6 +16,8 @@ export type ComparisonSpec = {
   unstaged?: boolean;
 };
 export type Snapshot = {
+  /** Absent on legacy captures. Labels are not authoritative scope evidence. */
+  captureView?: "full" | "since-reviewed";
   comparison?: ComparisonSpec;
   id: string;
   created: number;
@@ -69,12 +72,15 @@ export type ReviewState = {
   threads: Thread[];
   checkpoints: Record<string, Checkpoint>;
   submissions: Submission[];
+  guides: GuideDescriptor[];
+  guideReads: GuideReads;
 };
 export type Command =
   | { type: "thread"; thread: Thread }
   | { type: "checkpoint"; checkpoint: Checkpoint }
   | { type: "submit"; summary: string }
-  | { type: "archive"; archived: boolean };
+  | { type: "archive"; archived: boolean }
+  | { type: "guide-read"; guideId: string; chunkId: string; read: boolean };
 export type Event = {
   schema: 1;
   id: string;
@@ -86,6 +92,8 @@ export type Event = {
   | { type: "submission"; submission: Submission }
   | { type: "snapshot"; snapshotId: string }
   | { type: "archive"; archived: boolean }
+  | { type: "guide-published"; guide: GuideDescriptor }
+  | { type: "guide-read"; guideId: string; snapshotId: string; chunkId: string; read: boolean }
 );
 type SessionBase = {
   state: ReviewState;
@@ -113,5 +121,6 @@ export interface ReviewClient {
   saveDrafts(drafts: Draft[], revision: number): Promise<number>;
   refresh(view: "full" | "since"): Promise<Session>;
   snapshot(id: string): Promise<Snapshot>;
+  guide(id: string): Promise<PublishedGuide>;
   content(object: string): Promise<string>;
 }

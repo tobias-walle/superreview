@@ -27,6 +27,7 @@ export function FileTree({
   onToggle,
   readyFiles,
   unseenOnly,
+  scopeIndices,
 }: {
   files: ReviewFile[];
   selected: number;
@@ -35,18 +36,23 @@ export function FileTree({
   onToggle: (n: number, value: boolean) => void;
   readyFiles: number;
   unseenOnly: boolean;
+  scopeIndices?: readonly number[];
 }) {
   const comments = useComments();
   const root = useRef<HTMLDivElement>(null);
   const [closed, setClosed] = useState(new Set<string>());
+  const included = useMemo(() => (scopeIndices ? new Set(scopeIndices) : null), [scopeIndices]);
   const entries = useMemo(
     () =>
       buildFileTreeEntries(
         files.map((file) => file.path),
         closed,
-        (file) => !unseenOnly || !viewed[file],
+        (file) => {
+          if (included && !included.has(file)) return false;
+          return !unseenOnly || !viewed[file];
+        },
       ),
-    [files, closed, unseenOnly, viewed],
+    [files, closed, unseenOnly, viewed, included],
   );
   // TanStack Virtual exposes callbacks React Compiler cannot memoize safely.
   // oxlint-disable-next-line react/incompatible-library

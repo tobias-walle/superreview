@@ -25,6 +25,18 @@ A dense, calm workspace for reading code and giving precise feedback. The diff i
 - Submit freezes a feedback round. Copy is a separate action after submission and remains available in History. Never combine copy and submit.
 - Use existing accessible primitives, visible focus, named icon buttons and reduced-motion support. Keep primary actions reachable in small viewports.
 
+## Guided reviews
+
+Guides stay inside the real workspace. The selected chunk has its own existing file tree, inline explanation and scoped original diff. All files remains one click away. Chunk titles are freely selectable, with Remaining changes last when present. J/K and previous/next controls navigate files within the current scope, not chunks.
+
+Partial files keep original line numbers, word highlights and comment anchors. Show omission boundaries and Open full file. Explanation text and diagrams earn no viewed coverage. Chunk read is a separate explicit human confirmation, not approval, submission or a file-viewed shortcut.
+
+Opening a saved snapshot selects the latest valid matching guide. Publication never changes an already-open workspace's selected revision or scope. New code does not inherit an old explanation or read state. Historical guides require an explicit action to open their original snapshot.
+
+Present each explanation as one continuous reading surface, including its walkthrough and review questions. Keep chunk read state beside chunk navigation and preserve it across layout changes, comments and navigation. Hide chunk rows in All files mode. Mobile chunk selection stays in the files drawer. Local non-interactive diagrams use both themes, fit narrow screens and have text explanations or meaningful captions.
+
+[The guided-review testing guide](docs/GUIDED_REVIEW_TESTING.md) covers the supported workspace behavior and acceptance checks.
+
 ## Check before shipping
 
 Inspect both themes at desktop and narrow mobile widths. Exercise long paths, wrapped code, empty comparisons, range selection, draft editing, nested dialogs and submission history. Check scroll position, tree sync and visible-line coverage after layout changes. Virtualization must not hide active editors or count offscreen content as viewed.

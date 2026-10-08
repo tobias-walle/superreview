@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { readSkill } from "./skill";
 import { parseArgs, help } from "./args";
 import { version } from "./version";
+import { inspectGuide, validateGuide, importGuide } from "./guide-commands";
 import { repository, capture, git, type Comparison } from "../adapters/node/git";
 import { JsonlStore, atomicJson, listReviews, lockRepository } from "../adapters/node/jsonl-store";
 import { startServer } from "../adapters/node/server";
@@ -42,6 +43,57 @@ async function main() {
     options.color === "always" ||
     (options.color === "auto" && !!process.stdout.isTTY && !("NO_COLOR" in process.env));
   const paint = (text: string, color: number) => (colored ? `\x1b[${color}m${text}\x1b[0m` : text);
+  if (options.command === "guide-inspect") {
+    const output = await inspectGuide({ root, reviewId: options.id, snapshotId: options.snapshot });
+    if (options.json) console.log(JSON.stringify(output));
+    else {
+      console.log(`Review ${output.reviewId} · snapshot ${output.snapshotId}`);
+      console.log(`Capture: ${output.captureView || "legacy provenance unknown"}`);
+      console.log(`Comparison: ${JSON.stringify(output.comparison)}`);
+      for (const file of output.inventory.files)
+        console.log(
+          `${file.path}: old ${JSON.stringify(file.old)}, new ${JSON.stringify(file.new)}, markers ${file.markers.join(", ") || "none"}`,
+        );
+      console.log("Use --json for the saved diff and captured old/new source.");
+    }
+    return;
+  }
+  if (options.command === "guide-validate") {
+    const output = await validateGuide({ root, reviewId: options.id, directory: options.bundle });
+    if (options.json) console.log(JSON.stringify(output));
+    else if (output.valid) console.log("All captured changes explicitly assigned.");
+    else
+      for (const error of output.errors)
+        console.error(
+          `${error.code}: ${error.path || ""} ${error.side || ""} ${error.start || ""} ${error.end || ""} ${error.message}`,
+        );
+    if (!output.valid) process.exitCode = 1;
+    return;
+  }
+  if (options.command === "guide-import") {
+    const result = await importGuide({
+      root,
+      reviewId: options.id,
+      directory: options.bundle,
+      authorName: options.author,
+      expectedSequence: options.expectedSequence,
+      requestId: options.requestId || undefined,
+    });
+    const output = {
+      reviewId: options.id,
+      guideId: result.guide.id,
+      snapshotId: result.guide.snapshotId,
+      sequence: result.state.sequence,
+      requestId: result.requestId,
+      author: result.guide.author,
+    };
+    console.log(
+      options.json
+        ? JSON.stringify(output)
+        : `Published guide ${output.guideId}. Open with: superreview open ${options.id}`,
+    );
+    return;
+  }
   if (["list", "export", "threads"].includes(options.command)) {
     const finishReviews = startTiming(onTiming, "load reviews");
     const reviews = await listReviews(root);
@@ -378,6 +430,10 @@ async function main() {
 }
 main().catch((error) => {
   const json = process.argv.includes("--json");
-  console.error(json ? JSON.stringify({ error: error.message }) : `superreview: ${error.message}`);
+  console.error(
+    json
+      ? JSON.stringify({ error: error.message, diagnostics: error.diagnostics })
+      : `superreview: ${error.message}`,
+  );
   process.exitCode = 1;
 });

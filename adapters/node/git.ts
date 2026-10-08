@@ -467,6 +467,7 @@ export async function capture(
     });
     const snapshot: Snapshot = {
       id: randomUUID(),
+      captureView: view === "since" ? "since-reviewed" : "full",
       comparison,
       created: Date.now(),
       ...resolved,

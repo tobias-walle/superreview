@@ -178,7 +178,7 @@ export function threadOutput(state: ReviewState, submission = 0, draftCount = 0)
   };
 }
 
-async function activeServer(root: string) {
+export async function activeServer(root: string) {
   try {
     const value = JSON.parse(await readFile(join(root, "writer.lock", "server.json"), "utf8"));
     if (typeof value.url === "string" && typeof value.reviewId === "string") return value;
@@ -186,7 +186,7 @@ async function activeServer(root: string) {
   return null;
 }
 
-async function serverRequest<T>(url: string, path: string, value?: unknown): Promise<T> {
+export async function serverRequest<T>(url: string, path: string, value?: unknown): Promise<T> {
   const response = await fetch(
     `${url}/api/${path}`,
     value === undefined
@@ -197,8 +197,11 @@ async function serverRequest<T>(url: string, path: string, value?: unknown): Pro
           body: JSON.stringify(value),
         },
   );
-  const result = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(result.error || "Could not update review");
+  const result = (await response.json()) as T & { error?: string; diagnostics?: unknown };
+  if (!response.ok)
+    throw Object.assign(new Error(result.error || "Could not update review"), {
+      diagnostics: result.diagnostics,
+    });
   return result;
 }
 

@@ -81,6 +81,52 @@ A line comment must name an immutable snapshot, repository-relative path, side, 
 
 Comment and reply commands use the active review server when it is running. Otherwise, they take the repository writer lock and write directly. They never submit a round, resolve a thread, or mark a file viewed.
 
+## Guided reviews
+
+An external agent can prepare a guide for one saved snapshot. Superreview validates structural inclusion, not the agent's understanding or the correctness of the changes. Publication does not mark files viewed, confirm chunks read, resolve comments or submit feedback.
+
+```sh
+superreview guide inspect <review-id> --snapshot <snapshot-id> --json
+superreview guide validate <review-id> --bundle /tmp/review-guide --json
+superreview guide import <review-id> --bundle /tmp/review-guide \
+  --author "Code assistant" --expected-sequence <sequence> \
+  --request-id <stable-publication-id> --json
+superreview open <review-id>
+```
+
+`inspect` exports the exact saved snapshot, an interval-based change inventory and captured old/new source. It never substitutes the current worktree. Binary source is base64. Prepare guides against a `full` capture, not Since reviewed. Legacy snapshots without capture-view provenance require recapturing the original comparison. Staged-only and path-filtered captures remain valid, but their scope must be disclosed.
+
+Draft the bundle outside the captured worktree. It contains `guide.json` plus Markdown documents:
+
+```json
+{
+  "schema": 1,
+  "snapshotId": "<snapshot-id>",
+  "chunks": [
+    {
+      "id": "behavior",
+      "title": "Explain the behavior change",
+      "content": "behavior.md",
+      "targets": [{ "id": "implementation", "kind": "file", "path": "src/example.ts" }]
+    }
+  ]
+}
+```
+
+`behavior.md` must explain the change and include a real Markdown link such as `[Implementation](superreview://target/implementation)`. Every target needs a narrative link. Links inside code blocks are not narrative links. Chunk and target IDs must be unique. Content paths are relative to the bundle and cannot escape it.
+
+Whole-file targets explicitly account for all captured changes and file markers. A range target has `kind: "range"`, a literal captured `path`, `side: "old"` or `"new"`, and inclusive positive `start`/`end` line numbers. Replacements need both deleted and added lines assigned. Overlapping ranges count once. A final chunk with `kind: "remaining"` must explicitly list and explain its targets. Omit it when there are no remaining changes. There is no wildcard or automatic catch-all.
+
+Validation is read-only. Invalid guides exit nonzero with actionable diagnostics, including exact omitted ranges and metadata markers. Publication revalidates the exact bundle through the existing writer boundary and creates an immutable revision. `--expected-sequence` is required for import. Use the sequence from `threads` and a stable request ID. An identical retry is safe. Reusing that ID for changed content fails. Markdown edits require a new publication and start with no chunk-read confirmations.
+
+Saved-review opening selects the most recently published valid guide matching that exact snapshot. All files remains available. Publishing while a workspace is open does not change its selected guide or scope. Chunk trees, file counters and J/K navigation use the selected scope. Partial files preserve original line numbers and comments, show omission boundaries and offer **Open full file**. The chunk read checkbox is an independent human confirmation, not viewed coverage or approval.
+
+Explanations use safe Markdown. Raw HTML is not enabled, images are displayed as alt text, and internal links resolve through validated snapshot targets. Mermaid flowchart and sequence fences render locally with a constrained policy and sanitized SVG. Unsafe directives, actions, resources and HTML labels are rejected. Syntax failures remain visible without blocking the diff. Include prose explaining every diagram.
+
+Bundles are limited to 100 chunks, 10,000 targets, a 1 MiB manifest, 256 KiB per document and 4 MiB total. Published artifacts are limited to 16 MiB. Diagram input has separate limits reported by the validator and renderer. Oversized content fails explicitly rather than being silently dropped.
+
+See [Test guided reviews](GUIDED_REVIEW_TESTING.md) for an end-to-end authoring and workspace check.
+
 ## Feedback rounds
 
 Saved comments, replies, edits, deletions, and resolution changes remain pending until submitted. New browser messages have a human author. CLI comments and replies have an agent author. Old messages without author data remain unchanged and appear as **Legacy author unknown**. A submission freezes all changed threads, including their conversation context, summary, original code excerpts, and snapshot IDs. Editing a submitted comment produces pending feedback for the next round; it never rewrites the previous round. Unfinished editor drafts are excluded and clearly called out before submission. Submitting does not mark files viewed or resolve threads.

@@ -23,6 +23,17 @@ const EXTERNAL_UPDATE_INTERVAL_MS = 2000;
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const readySession = (session: Session): session is ReadySession => session.status === "ready";
 
+/** State-only polling must not replace immutable worker inputs or historical code. */
+export function mergePolledSession(old: ReadySession, loaded: ReadySession): ReadySession {
+  if (loaded.state.sequence <= old.state.sequence) return old;
+  const followsCurrentSnapshot = old.snapshot.id === old.state.snapshotId;
+  let snapshot = old.snapshot;
+  if (followsCurrentSnapshot && old.snapshot.id !== loaded.snapshot.id) {
+    snapshot = loaded.snapshot;
+  }
+  return { ...old, state: loaded.state, snapshot };
+}
+
 function useSession() {
   const [session, setSession] = useState<ReadySession | null>(null);
   const [capture, setCapture] = useState<CaptureProgress | null>(null);
@@ -36,6 +47,7 @@ function useSession() {
     if (readySession(loaded)) {
       current.current = loaded;
       setSession(loaded);
+      setView(loaded.snapshot.captureView === "since-reviewed" ? "since" : "full");
       setCapture(null);
       setError("");
       return true;
@@ -81,14 +93,12 @@ function useSession() {
         if (!readySession(loaded)) return;
         const old = current.current!;
         if (loaded.state.sequence <= old.state.sequence) return;
-        const showingCurrentSnapshot = old.snapshot.id === old.state.snapshotId;
-        const updated = {
-          ...old,
-          state: loaded.state,
-          snapshot: showingCurrentSnapshot ? loaded.snapshot : old.snapshot,
-        };
+        const updated = mergePolledSession(old, loaded);
         current.current = updated;
         setSession(updated);
+        if (updated.snapshot !== old.snapshot) {
+          setView(updated.snapshot.captureView === "since-reviewed" ? "since" : "full");
+        }
       });
       queue.current = sync.catch(() => {});
     }, EXTERNAL_UPDATE_INTERVAL_MS);
@@ -149,6 +159,7 @@ function useSession() {
         };
         current.current = updated;
         setSession(updated);
+        setView(updated.snapshot.captureView === "since-reviewed" ? "since" : "full");
         setCapture(null);
         setError("");
       });
@@ -157,6 +168,7 @@ function useSession() {
     }
   }
   const readContent = useCallback((object: string) => client.current!.content(object), []);
+  const readGuide = useCallback((id: string) => client.current!.guide(id), []);
   async function openSnapshot(id: string) {
     setBusy(true);
     try {
@@ -164,8 +176,11 @@ function useSession() {
       const next: ReadySession = { ...current.current!, status: "ready", snapshot };
       current.current = next;
       setSession(next);
+      setView(snapshot.captureView === "since-reviewed" ? "since" : "full");
+      return snapshot;
     } catch (e: any) {
       setError(e.message);
+      return null;
     } finally {
       setBusy(false);
     }
@@ -181,6 +196,7 @@ function useSession() {
     refresh,
     openSnapshot,
     readContent,
+    readGuide,
     reload,
     clearError: () => setError(""),
   };

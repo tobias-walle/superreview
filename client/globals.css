@@ -2518,6 +2518,205 @@ button {
   }
 }
 
+.partial-change-summary {
+  flex-wrap: wrap;
+}
+.partial-change-summary > span:last-of-type {
+  order: 1;
+  width: 100%;
+}
+.guide-scope-selector {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.guide-scope-selector > p {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--subtext);
+}
+.guide-chunks {
+  display: grid;
+  gap: 2px;
+  max-height: 30vh;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.guide-chunk-row {
+  position: relative;
+  min-width: 0;
+}
+.guide-chunk-select {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 34px 6px 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 13px;
+}
+.guide-chunk-select > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guide-chunk-select:hover {
+  background: var(--surface);
+}
+.guide-chunk-select[aria-current="true"] {
+  color: var(--mauve);
+  background: color-mix(in srgb, var(--mauve) 12%, var(--mantle));
+}
+.guide-chunk-select[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--mauve);
+  border-radius: 2px;
+}
+.guide-chunk-read {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--mantle);
+  opacity: 0.7;
+}
+.guide-chunk-read::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--overlay);
+  border-radius: 4px;
+}
+.guide-chunk-read:hover,
+.guide-chunk-read:focus-visible,
+.guide-chunk-read[data-state="checked"] {
+  opacity: 1;
+}
+.guide-chunk-read[data-state="checked"] {
+  background: transparent;
+}
+.guide-chunk-read[data-state="checked"]::before {
+  background: var(--green);
+  border-color: var(--green);
+}
+.guide-chunk-read svg {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+}
+.review-info button {
+  color: var(--mauve);
+  text-decoration: underline;
+}
+.guide-diagram-image {
+  pointer-events: none;
+  max-width: 100%;
+  overflow: hidden;
+}
+/* Diagrams are not icons. Override the unlayered workspace SVG dimensions. */
+.guide-diagram-image svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+.guide-diagram-image text {
+  fill: var(--foreground);
+  font-family: var(--font-sans);
+}
+/* Mermaid places these labels at their centers using CSS we strip from SVG. */
+.guide-diagram-image .label text,
+.guide-diagram-image .cluster-label text,
+.guide-diagram-image text.actor {
+  text-anchor: middle;
+}
+.guide-diagram-image rect,
+.guide-diagram-image polygon,
+.guide-diagram-image circle,
+.guide-diagram-image ellipse {
+  fill: var(--muted);
+  stroke: var(--border);
+}
+.guide-diagram-image path {
+  fill: none;
+  stroke: var(--muted-foreground);
+}
+.guide-diagram-image .node path {
+  fill: var(--muted);
+}
+.guide-diagram-image line {
+  stroke: var(--muted-foreground);
+}
+.guide-diagram-image marker path,
+.guide-diagram-image marker polygon {
+  fill: var(--muted-foreground);
+}
+.guide-diagram-image .messageLine1,
+.guide-diagram-image .edge-pattern-dashed,
+.guide-diagram-image .edge-pattern-dotted {
+  stroke-dasharray: var(--guide-diagram-dash);
+}
+.guide-source-dialog {
+  width: min(90vw, 960px) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: 85vh;
+  min-width: 0;
+}
+.guide-source-dialog [data-slot="dialog-title"] {
+  overflow-wrap: anywhere;
+  padding-right: 24px;
+}
+.guide-source-toggle {
+  justify-self: start;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.guide-source-toggle:hover {
+  background: var(--surface);
+}
+.guide-source-content {
+  min-width: 0;
+  max-height: 60vh;
+  margin: 0;
+  overflow: auto;
+  white-space: pre;
+  font-size: 12px;
+  tab-size: 2;
+}
+.guide-source-line {
+  display: grid;
+  grid-template-columns: 6ch minmax(0, 1fr);
+  min-width: max-content;
+  padding-right: 12px;
+}
+.guide-source-line.is-target {
+  background: color-mix(in srgb, var(--mauve) 16%, transparent);
+}
+.guide-source-line-number {
+  padding-right: 12px;
+  color: var(--overlay);
+  text-align: right;
+  user-select: none;
+}
 .file-change-summary {
   font-size: 12px;
   color: var(--subtext);
