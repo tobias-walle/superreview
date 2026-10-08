@@ -251,7 +251,18 @@ function Workspace() {
   });
 
   const commentsUseDrawer = viewportWidth < COMMENTS_DRAWER_BREAKPOINT_PX;
-  const chunks = guide.guide?.bundle.manifest.chunks || [];
+  const chunks = useMemo(() => guide.guide?.bundle.manifest.chunks || [], [guide.guide]);
+  const chunkFilesViewed = useMemo(() => {
+    const viewedPaths = new Set(
+      data.files.flatMap((file, index) => (progress.viewed[index] ? [file.path] : [])),
+    );
+    return Object.fromEntries(
+      chunks.map((chunk) => [
+        chunk.id,
+        chunk.targets.every((target) => viewedPaths.has(target.path)),
+      ]),
+    );
+  }, [chunks, data.files, progress.viewed]);
   const partialScope = !!guide.scope && [...guide.scope.values()].some((file) => file.partial);
   let scopeLabel = session.snapshot.label;
   if (session.snapshot.comparison?.cached) scopeLabel += " · Staged only";
@@ -284,6 +295,7 @@ function Workspace() {
                   <GuideScopeSelector
                     chunks={chunks}
                     reads={guide.reads}
+                    filesViewed={chunkFilesViewed}
                     selectedChunkId={guide.chunk?.id || null}
                     loading={guide.loading}
                     onSelect={selectScope}

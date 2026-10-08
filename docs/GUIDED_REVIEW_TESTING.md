@@ -40,7 +40,7 @@ Opening restores the saved snapshot, even if the worktree has changed since capt
 
 - Select both chunks. Each has its own file tree. Tree order, diff order, file counter and J/K navigation agree. Navigation stops at the ends.
 - For a partial/shared file, check original line numbers, omission boundaries and **Open full file**. **All files** shows the complete comparison.
-- Toggle the read checkbox beside a chunk, change chunks and reload. The confirmation persists only for that guide revision. It does not mark skipped file ranges viewed, resolve comments or submit feedback.
+- Toggle the checkbox beside a chunk, change chunks and reload. Explicit confirmation persists only for that guide revision and does not mark skipped file ranges viewed, resolve comments or submit feedback. The checkbox also appears complete when every targeted file is viewed; that derived state follows viewed checkpoints rather than writing a guide-read event.
 - Switch unified/split and show/hide deletions. Inspect old-side targets and comments. A comment outside the chunk opens the original full snapshot rather than a renumbered excerpt.
 - Start a comment draft, change scopes and return. Text and anchors remain intact. Check comments overview, History and submission dialogs.
 - Read through the complete explanation, switch layout and return to the chunk. The explanation remains one continuous text block through navigation and comment-only updates.

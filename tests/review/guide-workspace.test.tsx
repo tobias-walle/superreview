@@ -471,6 +471,7 @@ test("scope selector uses file-tree rows with independent read checkboxes", () =
     <GuideScopeSelector
       chunks={revision.bundle.manifest.chunks}
       reads={{ business: true }}
+      filesViewed={{ remaining: true }}
       selectedChunkId="remaining"
       loading={false}
       onSelect={() => {}}
@@ -480,16 +481,19 @@ test("scope selector uses file-tree rows with independent read checkboxes", () =
     />,
   );
   assert.match(html, /aria-label="Review scope"/);
+  assert.match(html, /class="[^"]*tree-viewed guide-chunk-read[^"]*"/);
   assert.match(html, /All files/);
   assert.ok(html.indexOf("Business rules") < html.indexOf("Remaining changes"));
   assert.match(html, /aria-current="true"[^>]*><span>Remaining changes/);
   assert.match(html, /aria-label="Mark unread: Business rules"/);
-  assert.match(html, /aria-label="Mark read: Remaining changes"/);
+  assert.match(html, /aria-label="All files viewed: Remaining changes"/);
+  assert.match(html, /data-disabled="" disabled=""/);
 
   const allFiles = renderToStaticMarkup(
     <GuideScopeSelector
       chunks={revision.bundle.manifest.chunks}
       reads={{ business: true }}
+      filesViewed={{ remaining: true }}
       selectedChunkId={null}
       loading={false}
       onSelect={() => {}}

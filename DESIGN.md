@@ -29,9 +29,9 @@ A dense, calm workspace for reading code and giving precise feedback. The diff i
 
 Guides stay inside the real workspace. The selected chunk has its own existing file tree, inline explanation and scoped original diff. All files remains one click away. Chunk titles are freely selectable, with Remaining changes last when present. J/K and previous/next controls navigate files within the current scope, not chunks.
 
-Partial files keep original line numbers, word highlights and comment anchors. Show omission boundaries and Open full file. Explanation text and diagrams earn no viewed coverage. Chunk read is a separate explicit human confirmation, not approval, submission or a file-viewed shortcut.
+Partial files keep original line numbers, word highlights and comment anchors. Show omission boundaries and Open full file. Explanation text and diagrams earn no viewed coverage. A chunk is complete after explicit confirmation or when every targeted file is viewed. Explicit confirmation is not approval, submission or a file-viewed shortcut.
 
-Opening a saved snapshot selects the latest valid matching guide. Publication never changes an already-open workspace's selected revision or scope. New code does not inherit an old explanation or read state. Historical guides require an explicit action to open their original snapshot.
+Opening a saved snapshot selects the latest valid matching guide. Publication never changes an already-open workspace's selected revision or scope. New code does not inherit an old explanation or explicit read state. Historical guides require an explicit action to open their original snapshot.
 
 Present each explanation as one continuous reading surface, including its walkthrough and review questions. Keep chunk read state beside chunk navigation and preserve it across layout changes, comments and navigation. Hide chunk rows in All files mode. Mobile chunk selection stays in the files drawer. Local non-interactive diagrams use both themes, fit narrow screens and have text explanations or meaningful captions.
 

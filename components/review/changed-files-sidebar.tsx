@@ -19,6 +19,7 @@ const DIFF_METER_SEGMENTS = 7;
 export function GuideScopeSelector({
   chunks,
   reads,
+  filesViewed,
   selectedChunkId,
   loading,
   onSelect,
@@ -28,6 +29,7 @@ export function GuideScopeSelector({
 }: {
   chunks: readonly { id: string; title: string }[];
   reads: Record<string, boolean>;
+  filesViewed: Record<string, boolean>;
   selectedChunkId: string | null;
   loading: boolean;
   onSelect: (chunkId: string | null) => void;
@@ -58,7 +60,8 @@ export function GuideScopeSelector({
       {selectedChunkId && (
         <ol aria-label="Guide chunks" className="guide-chunks">
           {chunks.map((chunk) => {
-            const read = reads[chunk.id] === true;
+            const automaticallyRead = filesViewed[chunk.id] === true;
+            const read = automaticallyRead || reads[chunk.id] === true;
             return (
               <li key={chunk.id} className="guide-chunk-row">
                 <button
@@ -70,12 +73,20 @@ export function GuideScopeSelector({
                   <span>{chunk.title}</span>
                 </button>
                 <Checkbox
-                  className="guide-chunk-read"
+                  className="tree-viewed guide-chunk-read"
                   checked={read}
-                  disabled={readDisabled}
+                  disabled={readDisabled || automaticallyRead}
                   onCheckedChange={(value) => onRead(chunk.id, value === true)}
-                  aria-label={`${read ? "Mark unread" : "Mark read"}: ${chunk.title}`}
-                  title={`${read ? "Mark chunk unread" : "Mark chunk read"}. This does not mark files viewed or approve changes.`}
+                  aria-label={
+                    automaticallyRead
+                      ? `All files viewed: ${chunk.title}`
+                      : `${read ? "Mark unread" : "Mark read"}: ${chunk.title}`
+                  }
+                  title={
+                    automaticallyRead
+                      ? "Complete because every file in this chunk is viewed."
+                      : `${read ? "Mark chunk unread" : "Mark chunk read"}. This does not mark files viewed or approve changes.`
+                  }
                 />
               </li>
             );

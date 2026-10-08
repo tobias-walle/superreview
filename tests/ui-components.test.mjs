@@ -45,7 +45,7 @@ test("emits workspace animation and scrolling accessibility styles", async () =>
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   // Guide diagrams must override the shared 16px icon rule, not rely on layered utilities.
   assert.match(css, /\.guide-diagram-image svg\s*\{[^}]*width:\s*auto[^}]*height:\s*auto/s);
-  assert.match(css, /\.guide-chunk-read\s*\{[^}]*width:\s*32px[^}]*height:\s*32px/s);
+  assert.match(css, /\.tree-viewed:{1,2}after\s*\{[^}]*inset:\s*-7px/s);
 });
 
 test("bundled guided-review dependencies retain their license notices", async () => {
