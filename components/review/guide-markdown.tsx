@@ -43,7 +43,7 @@ export function GuideMarkdown({
               return (
                 <button
                   type="button"
-                  className="min-h-8 cursor-pointer rounded-sm text-left text-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="inline cursor-pointer rounded-sm text-left align-baseline text-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => onTarget(id)}
                 >
                   {children}
